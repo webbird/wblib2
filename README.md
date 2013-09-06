@@ -3,6 +3,13 @@ wblib2
 
 Complete rework of wblib (https://github.com/webbird/wblib)
 
+Classes
+=======
+
+wbList  - ListBuilder **ready to use**
+wbLang  - Internationalization **ready to use**
+wbForms - FormBuilder **NOT ready**
+
 SQL Abstraction
 ===============
 
@@ -17,7 +24,7 @@ Usage example:
         // next in stack
     });
 
-    $db   = wblib\wbSQL::getInstance(array('user'=>'<user>','pass'=>'<password>','dbname'=>'<database>','prefix'=>''));
+    $db   = wblib\wbQuery::getInstance(array('user'=>'<user>','pass'=>'<password>','dbname'=>'<database>','prefix'=>''));
     $data = $db->search(array(
                     'fields' => 'count(t1.item_id) AS sum',
                         'tables' => array(
