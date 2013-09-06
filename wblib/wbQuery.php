@@ -1,17 +1,15 @@
 <?php
 
 /**
+ *          _     _  _ _     ______
+ *         | |   | |(_) |   (_____ \
+ *    _ _ _| |__ | | _| |__   ____) )
+ *   | | | |  _ \| || |  _ \ / ____/
+ *   | | | | |_) ) || | |_) ) (_____
+ *    \___/|____/ \_)_|____/|_______)
  *
- *          _     _  _ _
- *         | |   | |(_) |
- *    _ _ _| |__ | | _| |__
- *   | | | |  _ \| || |  _ \
- *   | | | | |_) ) || | |_) )
- *   \___/|____/ \_)_|____/
- *
- *
- *   @category     wblib
- *   @package      wbSQL
+ *   @category     wblib2
+ *   @package      wbQuery
  *   @author       BlackBird Webprogrammierung
  *   @copyright    (c) 2013 BlackBird Webprogrammierung
  *   @license      GNU LESSER GENERAL PUBLIC LICENSE Version 3
@@ -23,35 +21,43 @@ namespace wblib;
 /**
  * SQL abstraction class
  *
- * @category   wblib
- * @package    wbSQL
+ * @category   wblib2
+ * @package    wbQuery
  * @copyright  Copyright (c) 2013 BlackBird Webprogrammierung
  * @license    GNU LESSER GENERAL PUBLIC LICENSE Version 3
  */
-if ( ! class_exists( 'wbSQL', false ) )
+if ( ! class_exists( 'wbQuery', false ) )
 {
-    class wbSQL {
+    class wbQuery {
 
         /**
          * array of named instances
          **/
-        public static $instances = array();
+        public static $instances  = array();
         /**
          * logger
          **/
-        private static $analog   = NULL;
+        private static $analog    = NULL;
         /**
          * log level
          **/
-        public static $loglevel  = 0;
+        public  static $loglevel  = 4;
         /**
          * default driver
          **/
-        public static $driver    = 'MySQL';
+        public static $driver     = 'MySQL';
         /**
          * array of options
          **/
-        public        $options   = array();
+        public        $options    = array();
+        /**
+         *
+         **/
+        private $_lastStatement   = NULL;
+        /**
+         *
+         **/
+        private $hashes           = array();
 
         // private to make sure that constructor can only be called
         // using getInstance()
@@ -106,7 +112,7 @@ if ( ! class_exists( 'wbSQL', false ) )
             try {
                 $classname = 'wblib\\'.$driver;
                 return new $classname($options);
-            } catch (wbSQLException $e) {
+            } catch (wbQueryException $e) {
                 self::log($e->getMessage);
                 echo $e->getMessage();
             }
@@ -130,7 +136,7 @@ if ( ! class_exists( 'wbSQL', false ) )
                 if(file_exists(dirname(__FILE__).'/3rdparty/Analog/wblib.init.inc.php'))
                 {
                     include_once(dirname(__FILE__).'/3rdparty/Analog/wblib.init.inc.php');
-                    wblib_init_3rdparty(dirname(__FILE__).'/debug/','wbSQL',self::$loglevel);
+                    wblib_init_3rdparty(dirname(__FILE__).'/debug/','wbQuery',self::$loglevel);
                     self::$analog = true;
                 }
                 else
@@ -138,16 +144,17 @@ if ( ! class_exists( 'wbSQL', false ) )
                     self::$analog = -1;
                 }
             }
-            if ( self::$analog )
+
+            if ( self::$analog !== -1 )
                 \Analog::log($message,$level);
         }   // end function log()
         
     }
 
-    class wbSQLException extends \Exception {}
+    class wbQueryException extends \Exception {}
 }
 
-interface wbSQL_DriverInterface
+interface wbQuery_DriverInterface
 {
     function getDSN           ();
     function getDriverOptions ();
@@ -166,24 +173,25 @@ interface wbSQL_DriverInterface
     function parse_where      ( $where );
     function max              ( $fieldname, $options );
     function showTables       ();
-}   // end interface wbSQL_DriverInterface
+}   // end interface wbQuery_DriverInterface
 
 
 /**
  * default SQL driver class
  *
- * @category   wblib
- * @package    wbSQL
+ * @category   wblib2
+ * @package    wbQuery
  * @copyright  Copyright (c) 2013 BlackBird Webprogrammierung
  * @license    GNU LESSER GENERAL PUBLIC LICENSE Version 3
  */
-if ( ! class_exists( 'wbSQLDriver', false ) )
+if ( ! class_exists( 'wbQueryDriver', false ) )
 {
-    class wbSQL_Driver extends \PDO
+    class wbQuery_Driver extends \PDO
     {
 
         protected $dsn                  = NULL;
-        protected $host                 = "localhost";
+        protected $driver               = 'MySQL';
+        protected $host                 = 'localhost';
         protected $port                 = NULL;
         protected $user                 = NULL;
         protected $pass                 = NULL;
@@ -303,7 +311,7 @@ if ( ! class_exists( 'wbSQLDriver', false ) )
          * Create valid DSN and store it for later use
          *
          * @access public
-         * @return void
+         * @return string
          **/
         public function getDSN() {
             if ( empty( $this->dsn ) ) {
@@ -325,6 +333,18 @@ if ( ! class_exists( 'wbSQLDriver', false ) )
          **/
         public function getDriverOptions() {
         }   // end function getDriverOptions()
+
+        /**
+         * Accessor to last executed statement; useful for debugging
+         *
+         * @access public
+         * @return string
+         *
+         **/
+    	public function getLastStatement() {
+    	    return $this->_lastStatement;
+    	}   // end function getLastStatement()
+
 
 /*******************************************************************************
  * SQL BUILDER
@@ -359,51 +379,66 @@ if ( ! class_exists( 'wbSQLDriver', false ) )
                 return NULL;
             }
 
-            $tables = $this->map_tables( $options['tables'], $options );
+            // cache statement
+            $hash = (md5(serialize($options)));
+            if(isset($this->hashes) && count($this->hashes) && array_key_exists($hash,$this->hashes))
+            {
+                $this->statement = $this->hashes[$hash];
+                $params = isset( $options['params'] ) && is_array( $options['params'] )
+                        ? $this->params( $options['params'] )
+                        : NULL;
+            }
+            else
+            {
+                $tables = $this->map_tables( $options['tables'], $options );
 
-            $fields = isset( $options['fields'] )
-                    ? $options['fields']
-                    : '*';
+                $fields = isset( $options['fields'] )
+                        ? $options['fields']
+                        : '*';
 
-            $where  = isset( $options['where'] )
-                    ? $this->parse_where( $options['where'] )
-                    : NULL;
+                $where  = isset( $options['where'] )
+                        ? $this->parse_where( $options['where'] )
+                        : NULL;
 
-            $order  = isset( $options['order_by'] )
-                    ? $this->order_by( $options['order_by'] )
-                    : NULL;
+                $order  = isset( $options['order_by'] )
+                        ? $this->order_by( $options['order_by'] )
+                        : NULL;
 
-            $limit  = isset( $options['limit'] )
-                    ? $this->limit( $options['limit'] )
-                    : NULL;
+                $limit  = isset( $options['limit'] )
+                        ? $this->limit( $options['limit'] )
+                        : NULL;
 
-            $params = isset( $options['params'] ) && is_array( $options['params'] )
-                    ? $this->params( $options['params'] )
-                    : NULL;
+                $params = isset( $options['params'] ) && is_array( $options['params'] )
+                        ? $this->params( $options['params'] )
+                        : NULL;
 
-            $group  = isset( $options['group_by'] )
-                    ? $this->group_by($options['group_by'])
-                    : NULL;
+                $group  = isset( $options['group_by'] )
+                        ? $this->group_by($options['group_by'])
+                        : NULL;
 
-    		// any errors so far?
-    		if ( $this->isError() ) {
-    		    // let the caller handle the error, just return false here
-    		    $this->setError('unable to prepare the statement!','fatal');
-                return false;
-    		}
+        		// any errors so far?
+        		if ( $this->isError() ) {
+        		    // let the caller handle the error, just return false here
+        		    $this->setError('unable to prepare the statement!','fatal');
+                    return false;
+        		}
 
-            // create the statement
-            $this->statement
-                = "SELECT "
-                . (
-                      is_array( $fields )
-                    ? implode( ', ', $fields )
-                    : $fields
-                  )
-                . " FROM $tables $where $group $order $limit";
+                // create the statement
+                $this->statement
+                    = "SELECT "
+                    . (
+                          is_array( $fields )
+                        ? implode( ', ', $fields )
+                        : $fields
+                      )
+                    . " FROM $tables $where $group $order $limit";
+
+                $this->hashes[$hash] = $this->statement;
+            }
 
             self::log('executing statement (interpolated for debugging)',7);
             self::log(self::interpolateQuery($this->statement,$params),7);
+            $this->_lastStatement = self::interpolateQuery($this->statement,$params);
 
             // create statement handle
             $stmt   = $this->prepare( $this->statement );
@@ -571,7 +606,7 @@ if ( ! class_exists( 'wbSQLDriver', false ) )
                     self::$analog = -1;
                 }
             }
-            if ( self::$analog )
+            if ( self::$analog !== -1 )
                 \Analog::log($message,$level);
         }   // end function log()
 
@@ -697,7 +732,7 @@ if ( ! class_exists( 'wbSQLDriver', false ) )
 
 if ( ! class_exists( 'MySQL', false ) )
 {
-    class MySQL extends wbSQL_Driver implements wbSQL_DriverInterface
+    class MySQL extends wbQuery_Driver implements wbQuery_DriverInterface
     {
         protected $port   = 3306;
         protected $driver = 'mysql';

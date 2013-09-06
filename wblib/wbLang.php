@@ -92,6 +92,7 @@ if ( ! class_exists( 'wbLang', false ) )
         public static function getInstance()
         {
             $language = call_user_func_array('self::getLang',func_get_args());
+            if ( !$language ) $language = 'en_gb';
             if ( !array_key_exists( $language, self::$instances ) ) {
                 self::log(sprintf('creating new instance with name [%s]',$language),7);
                 self::$instances[$language] = new self(func_get_args());
@@ -195,6 +196,8 @@ if ( ! class_exists( 'wbLang', false ) )
          **/
         public static function getLang()
         {
+            $args     = array();
+            $language = NULL;
             if ( func_num_args() )
                 $args = func_get_args();
             self::log('args: '.var_export($args,1),7);
@@ -209,7 +212,7 @@ if ( ! class_exists( 'wbLang', false ) )
                 $language = self::getfrombrowser();
             if ( !$language )
                 $language = self::$defaults['default'];
-            return $language;
+            return ( is_array($language) ? array_shift($language) : $language );
         }   // end function getLang()
         
 
@@ -265,10 +268,9 @@ if ( ! class_exists( 'wbLang', false ) )
             $langs = wbArray::sort( $browser_langs, 'qual', 'desc', true );
             $ret   = array();
             foreach ( $langs as $lang )
-                $ret[] = $lang[ 'lang' ];
+                $ret[] = strtolower(str_replace('-','_',$lang['lang']));
 
             return $ret;
-
         } // end function getfrombrowser()
 
         /**
@@ -478,16 +480,16 @@ if ( ! class_exists( 'wbLang', false ) )
     /**
      * validation helper methods
      *
-     * @category   wblib
+     * @category   wblib2
      * @package    wbValidate
      * @copyright  Copyright (c) 2013 BlackBird Webprogrammierung
      * @license    GNU LESSER GENERAL PUBLIC LICENSE Version 3
      */
-    if ( ! class_exists( 'wbValidate', false ) )
+    if ( ! class_exists( 'wblib\wbValidate', false ) )
     {
         class wbValidate
         {
-              /**
+            /**
              * fixes a path by removing //, /../ and other things
              *
              * @access public
