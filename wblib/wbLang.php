@@ -428,7 +428,7 @@ if ( ! class_exists( 'wbLang', false ) )
      * @copyright  Copyright (c) 2013 BlackBird Webprogrammierung
      * @license    GNU LESSER GENERAL PUBLIC LICENSE Version 3
      */
-    if ( ! class_exists( 'wbArray', false ) )
+    if ( ! class_exists( 'wblib\wbArray', false ) )
     {
         class wbArray
         {
