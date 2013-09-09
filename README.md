@@ -6,9 +6,9 @@ Complete rework of wblib (https://github.com/webbird/wblib)
 Classes
 =======
 
-wbList  - ListBuilder **ready to use**
-wbLang  - Internationalization **ready to use**
-wbForms - FormBuilder **NOT ready**
+* wbList  - ListBuilder **ready to use**
+* wbLang  - Internationalization **ready to use**
+* wbForms - FormBuilder **NOT ready**
 
 SQL Abstraction
 ===============
