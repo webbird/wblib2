@@ -69,6 +69,7 @@ if ( ! class_exists( 'wbForms', false ) )
         protected static $config     = array(
             'blank_span'      => NULL,
             'breaks'          => NULL,
+            'css'             => NULL,
             'css_files'       => NULL,
             'file'            => NULL,
             'form_style'      => NULL,
@@ -211,11 +212,7 @@ if ( ! class_exists( 'wbForms', false ) )
         /**
          * current form attributes
          **/
-        protected $attr = array();
-        /**
-         * additional css files to load
-         **/
-        protected $css  = array();
+        protected $attr      = array();
 
         /**
          * no cloning!
@@ -262,7 +259,9 @@ if ( ! class_exists( 'wbForms', false ) )
                 // add breaks (<br />) after each element
                 'breaks'          => true,
                 // <form> style
-                'form_style'       => 'width:800px;margin:10px auto;',
+                'form_style'      => 'width:800px;margin:10px auto;',
+                // inline css
+                'css'             => array(),
                 // list of custom css files to add
                 'css_files'       => array(),
                 // form wrapper div class
@@ -403,9 +402,29 @@ if ( ! class_exists( 'wbForms', false ) )
          * @param  string  $url
          * @return
          **/
-        public function addCSS($url)
+        public function addCSSLink($url)
         {
             self::$config['css_files'][] = $url;
+        }   // end function addCSSLink()
+
+        /**
+         * allows to add custom css; will be loaded into the HTML
+         * header using JavaScript (jQuery)
+         *
+         * @access public
+         * @param  string  $css
+         * @return
+         **/
+        public function addCSS($css)
+        {
+            if(is_array($css))
+                self::$config['css']
+                    = array_merge(
+                          self::$config['css'],
+                          $css
+                      );
+            else
+                self::$config['css'][] = $css;
         }   // end function addCSS()
 
         /**
@@ -577,6 +596,19 @@ if ( ! class_exists( 'wbForms', false ) )
             $output .= wbFormsJQuery::getComponents();
             return $output;
         }   // end function render()
+
+        /**
+         *
+         * @access public
+         * @return
+         **/
+        public static function dump()
+        {
+            echo "<textarea cols=\"100\" rows=\"20\" style=\"width: 100%;\">";
+            print_r( var_export(self::$FORMS[self::$CURRENT]) );
+            echo "</textarea>";
+        }   // end function dump()
+        
     }   // ----------  end class wbForms ----------
 
     /**
@@ -627,6 +659,7 @@ if ( ! class_exists( 'wbForms', false ) )
             {
                 $code   = NULL;
                 $output = NULL;
+
                 // always load the core if UI is required
                 if(count(self::$ui_components))
                 {
@@ -638,6 +671,7 @@ if ( ! class_exists( 'wbForms', false ) )
                             . self::$config['jquery_src']
                             . '"></script>'
                             . "\n";
+
                 if(self::$config['jquery_ui'])
                 {
                     $output .= '<script type="text/javascript" src="'
@@ -645,10 +679,7 @@ if ( ! class_exists( 'wbForms', false ) )
                             .  '"></script>'
                             .  "\n";
                     if ( $called_from_header )
-                        $output .= '<link rel="stylesheet" href="'
-                                .  str_ireplace('%theme%',self::$config['jquery_ui_theme'],self::$config['jquery_ui_css'])
-                                .  '" type="text/css" media="screen" />'
-                                ;
+                        $output .= self::renderHeader();
                     else
                         $code   = "\n\t\t"
                                 .  '$("head").append(\'<link rel="stylesheet" href="'
@@ -676,6 +707,20 @@ if ( ! class_exists( 'wbForms', false ) )
                                   )
                               );
 
+                // add tooltips
+                $code .= "
+                    jQuery('span.fbinfo').tooltip();
+                    jQuery('span.fbinfo').each( function() { if ( jQuery(this).attr('title').length ) { jQuery(this).show(); } });
+                    jQuery('input').unbind('click').click( function(e) {
+                        jQuery('span.fbinfosmall').remove();
+                        if(jQuery(this).next('span.fbinfo').attr('title').length) {
+                            jQuery(this).next('span.fbinfo').after(
+                                '<span class=\"fbinfosmall ui-widget ui-widget-content ui-corner-all\" style=\"font-size:0.7em;padding:5px;\">'+jQuery(this).next('span.fbinfo').attr('title')+'</span>'
+                            );
+                        }
+                    });
+                ";
+
                 if($output||$code)
                     return $output . ( $code ? self::render($code) : '' );
 
@@ -700,6 +745,42 @@ if ( ! class_exists( 'wbForms', false ) )
                     '</script>'."\n"
                     ;
             }   // end function render()
+
+            /**
+             *
+             * @access private
+             * @return
+             **/
+            private static function renderHeader()
+            {
+
+                $output = '<link rel="stylesheet" href="'
+                        .  str_ireplace('%theme%',self::$config['jquery_ui_theme'],self::$config['jquery_ui_css'])
+                        .  '" type="text/css" media="screen" />'
+                        ;
+
+                if(count(self::$config['css_files']))
+                    foreach(self::$config['css_files'] as $url)
+                        $output .= "\n\t\t"
+                                .  '<link rel="stylesheet" href="'
+                                .  $url
+                                .  '" type="text/css" />'
+                                ;
+
+                if(count(self::$config['css']))
+                {
+                    $output .= '<style type="text/css" media="screen">'."\n";
+                    foreach(self::$config['css'] as $content)
+                        $output .= "\n\t\t"
+                                .  $content
+                                ;
+                    $output .= '</style>';
+                }
+
+                return $output;
+
+            }   // end function renderHeader()
+            
         }
     }   // ---------- end class wbFormsJQuery ----------
 
@@ -724,7 +805,6 @@ if ( ! class_exists( 'wbForms', false ) )
                 'class'     => NULL,
                 'disabled'  => false,
                 'id'        => NULL,
-                'infotext'  => NULL,
                 'label'     => NULL,
                 'name'      => NULL,
                 'onblur'    => NULL,
@@ -736,10 +816,12 @@ if ( ! class_exists( 'wbForms', false ) )
                 'required'  => false,
                 'style'     => NULL,
                 'tabindex'  => NULL,
+                'title'     => NULL,
                 'value'     => NULL,
                 // internal attributes
                 'allow'     => NULL,
                 'equal_to'  => NULL,
+                'infotext'  => NULL,
                 'invalid'   => NULL,
                 'missing'   => NULL,
                 'type'      => NULL,
@@ -752,12 +834,13 @@ if ( ! class_exists( 'wbForms', false ) )
                 'value'   , 'tabindex', 'accesskey', 'class'   , 'style'   ,
                 'disabled', 'readonly', 'required' , 'checked' , 'selected',
                 'onblur'  , 'onchange', 'onclick'  , 'onfocus' , 'onselect',
+                'title'
             );
             /**
              * default output template
+             * value is set in constructor to allow concatenation
              **/
-            public static $tpl
-                = "%required_span%%label%<input type=\"%type%\" name=\"%name%\" id=\"%id%\" %value%%required%%tabindex%%accesskey%%class%%style%%disabled%%readonly%%onblur%%onchange%%onclick%%onfocus%%onselect%/>\n";
+            public static $tpl = NULL;
             /**
              *
              **/
@@ -774,6 +857,19 @@ if ( ! class_exists( 'wbForms', false ) )
              **/
             public function __construct($options=array())
             {
+                if(!self::$tpl)
+                    self::$tpl =
+                         // markup for required fields
+                         "%required_span%"
+                         // markup for <label>
+                       . "%label%"
+                         // default attributes
+                       . "<input type=\"%type%\" name=\"%name%\" id=\"%id%\" "
+                         // more attributes
+                       . "%value%%required%%title%%tabindex%%accesskey%%class%%style%%disabled%%readonly%%onblur%%onchange%%onclick%%onfocus%%onselect%/>"
+                         // tooltip; default is display:none, will be show()n using jQuery later on
+                       . "&nbsp;<span class=\"fbinfo ui-button ui-icon ui-icon-comment\" title=\"%infotext%\" style=\"display:none;\">&nbsp;&nbsp;&nbsp;</span>\n"
+                       ;
                 $this->init();
                 foreach($this->attributes as $key => $default)
                 {
@@ -834,6 +930,8 @@ if ( ! class_exists( 'wbForms', false ) )
              **/
             public function checkAttr()
             {
+                if(!isset($this->attr['type']))
+                    $this->attr['type'] = 'text';
                 if(!isset($this->attr['name']))
                     $this->attr['name'] = wbFormsElement::generateName();
                 if(!isset($this->attr['id']))
@@ -881,7 +979,21 @@ if ( ! class_exists( 'wbForms', false ) )
 
                 if(isset($this->attr['label']) && !$this instanceof wbFormsElementLabel && !$this instanceof wbFormsElementButton)
                 {
-                    $label = new wbFormsElementLabel(array('id'=>$this->attr['id'],'label'=>self::t($this->attr['label'])));
+                    $label = new wbFormsElementLabel(
+                        array(
+                            'id'       => $this->attr['id'],
+                            'label'    => self::t($this->attr['label']),
+                            'is_radio' =>
+                                (
+                                    (
+                                           substr($this->attr['type'],0,5) == 'radio'
+                                        || substr($this->attr['type'],0,8) == 'checkbox'
+                                    )
+                                    ? true
+                                    : false
+                                ),
+                        )
+                    );
                     $this->attr['label'] = $label->render();
                 }
 
@@ -911,6 +1023,10 @@ if ( ! class_exists( 'wbForms', false ) )
 
                 // remove any placeholders not replaced yet
                 $output = preg_replace( '~%\w+%~', '', $output );
+
+                //
+                if ( $this->attr['type'] == 'checkbox' )
+                    wbFormsJQuery::addComponent($this->attr['id'],'button');
 
                 return $output
                     . (
@@ -1026,10 +1142,29 @@ if ( ! class_exists( 'wbForms', false ) )
         {
             public static $tpl
                 = '<label for="%id%" %class%%style%>%label%</label>';
+            public static $default_style
+                = 'display:inline-block;min-width:250px;margin-left:15px;';
             public $attr = array(
                 'class'    => 'fblabel',
-                //'style'    => 'display:inline-block;min-width:250px;margin-left:15px;',
+                'style'    => NULL,
+                'is_radio' => false,
             );
+            /**
+             * adds select specific attributes
+             **/
+            public function init()
+            {
+                $this->attributes['is_radio'] = NULL;
+                $this->attr['style'] = self::$default_style;
+                return $this;
+            }
+            public function render()
+            {
+                // remove style from radio fields
+                if($this->attr['is_radio'] && $this->attr['style'] == self::$default_style)
+                    unset( $this->attr['style'] );
+                return $this->replaceAttr();
+            }
         }   // ---------- end class wbFormsElementLabel ----------
 
         /**
@@ -1042,8 +1177,16 @@ if ( ! class_exists( 'wbForms', false ) )
          */
         class wbFormsElementTextarea extends wbFormsElement
         {
-            public static $tpl
-                = '%required_span%%label%<textarea name="%name%" id="%id%" %tabindex%%accesskey%%class%%style%%disabled%%readonly%%onblur%%onchange%%onclick%%onfocus%%onselect%>%value%</textarea>';
+            public function init()
+            {
+                self::$tpl
+                    = '%required_span%%label%'
+                    . '<textarea name="%name%" id="%id%" '
+                    . '%tabindex%%accesskey%%class%%style%%disabled%%readonly%%onblur%%onchange%%onclick%%onfocus%%onselect%>'
+                    . '%value%'
+                    . '</textarea>'
+                    ;
+            }
         }   // ---------- end class wbFormsElementTextarea ----------
 
         /**
@@ -1056,8 +1199,6 @@ if ( ! class_exists( 'wbForms', false ) )
          */
         class wbFormsElementSelect extends wbFormsElement
         {
-            public static $tpl
-                = '%required_span%%label%<select name="%name%" id="%id%" %multiple%%tabindex%%accesskey%%class%%style%%disabled%%readonly%%onblur%%onchange%%onclick%%onfocus%%onselect%>%options%</select>';
             /**
              * adds select specific attributes
              **/
@@ -1066,6 +1207,15 @@ if ( ! class_exists( 'wbForms', false ) )
                 $this->attributes['options']  = NULL;
                 $this->attributes['selected'] = NULL;
                 $this->attributes['multiple'] = NULL;
+                self::$tpl
+                    = '%required_span%%label%'
+                    . '<select name="%name%" id="%id%" '
+                    . '%multiple%%tabindex%%accesskey%%class%%style%%disabled%%readonly%%onblur%%onchange%%onclick%%onfocus%%onselect%>'
+                    . '%options%'
+                    . '</select>'
+                    // tooltip; default is display:none, will be show()n using jQuery later on
+                    . "&nbsp;<span class=\"fbinfo ui-button ui-icon ui-icon-comment\" title=\"%infotext%\" style=\"display:none;float:right;margin-right:235px;\">&nbsp;&nbsp;&nbsp;</span>\n"
+                    ;
                 return $this;
             }
             public function render()
@@ -1087,6 +1237,34 @@ if ( ! class_exists( 'wbForms', false ) )
                 return $this->replaceAttr();
             }   // end function render()
         }   // ---------- end class wbFormsElementSelect ----------
+
+        /**
+         * form builder checkbox element class
+         *
+         * @category   wblib2
+         * @package    wbFormsElementCheckbox
+         * @copyright  Copyright (c) 2013 BlackBird Webprogrammierung
+         * @license    GNU LESSER GENERAL PUBLIC LICENSE Version 3
+         */
+        class wbFormsElementCheckbox extends wbFormsElement
+        {
+            public static $tpl
+                = "%required_span%<span style=\"%label_style%\">%checkbox_label%</span><input type=\"%type%\" name=\"%name%\" id=\"%id%\" %value%%checked%%required%%tabindex%%accesskey%%class%%style%%disabled%%readonly%%onblur%%onchange%%onclick%%onfocus%%onselect%/> %label%\n";
+            public function init()
+            {
+                $this->attributes['checked']        = NULL;
+                $this->attributes['label_style']    = wbFormsElementLabel::$default_style;
+                $this->attributes['checkbox_label'] = NULL;
+                return $this;
+            }
+            public function render()
+            {
+                $this->attr['checkbox_label'] = $this->attr['label'];
+                $this->checkAttr();
+                return $this->replaceAttr();
+            }
+
+        }   // ---------- end class wbFormsElementCheckbox ----------
 
         /**
          * form builder radio element class
@@ -1119,14 +1297,15 @@ if ( ! class_exists( 'wbForms', false ) )
          */
         class wbFormsElementRadiogroup extends wbFormsElement
         {
-            public  static $tpl
-                = '%required_span%<div class="radiogroup" id="%id%">%options%</div>';
-            private static $number = 0;
+            public    static $tpl
+                = '<div class="radiogroup" id="%id%">%required_span%<span style="%label_style%">%label%</span>%options%</div>';
+            protected static $number = 0;
             public function init()
             {
-                $this->attributes['type']    = 'radio';
-                $this->attributes['checked'] = 'checked';
-                $this->attributes['options'] = array();
+                $this->attributes['type']        = 'radio';
+                $this->attributes['checked']     = 'checked';
+                $this->attributes['options']     = array();
+                $this->attributes['label_style'] = wbFormsElementLabel::$default_style;
                 return $this;
             }
             public function render()
@@ -1139,19 +1318,42 @@ if ( ! class_exists( 'wbForms', false ) )
                 {
                     $options[] = wbFormsElementRadio::get(
                         array(
-                            'type'    => 'radio',
+                            'type'    => str_replace('group', '', $this->attr['type'] ),
                             'name'    => $this->attr['name'],
                             'id'      => $this->attr['name'].'_'.$value,
                             'label'   => ( $isIndexed ? $value : $key ),
                             'value'   => $value,
+                            'checked' => ( isset($this->attr['checked']) && $this->attr['checked'] == $value )
+                                      ?  'checked'
+                                      :  NULL,
                         ))->render();
                 }
                 $this->attr['options'] = implode( "\n", $options );
-                $this->attr['id']      = 'radiogroup_'.self::$number;
+                $this->attr['id']      = $this->attr['type'].'_'.self::$number;
                 wbFormsJQuery::addComponent($this->attr['id'],'buttonset');
                 return $this->replaceAttr();
             }
         }   // ---------- end class wbFormsElementRadio ----------
+
+        /**
+         * form builder radio group class
+         *
+         * groups a list of radio elements
+         *
+         * @category   wblib2
+         * @package    wbFormsElementRadioGroup
+         * @copyright  Copyright (c) 2013 BlackBird Webprogrammierung
+         * @license    GNU LESSER GENERAL PUBLIC LICENSE Version 3
+         */
+        class wbFormsElementCheckboxgroup extends wbFormsElementRadiogroup
+        {
+            public function init()
+            {
+                parent::init();
+                $this->attributes['type'] = 'checkbox';
+                return $this;
+            }
+        }
 
         /**
          * form builder date element class; uses jQuery DatePicker
