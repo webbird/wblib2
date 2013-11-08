@@ -43,7 +43,7 @@ if ( ! class_exists( 'wbLang', false ) )
         /**
          * log level
          **/
-        public  static $loglevel    = 3;
+        public  static $loglevel    = 7;
         /**
          * array of default options
          **/
@@ -265,7 +265,7 @@ if ( ! class_exists( 'wbLang', false ) )
             }
 
             // order array by quality
-            $langs = wbArray::sort( $browser_langs, 'qual', 'desc', true );
+            $langs = self::sort( $browser_langs, 'qual', 'desc', true );
             $ret   = array();
             foreach ( $langs as $lang )
                 $ret[] = strtolower(str_replace('-','_',$lang['lang']));
@@ -281,6 +281,7 @@ if ( ! class_exists( 'wbLang', false ) )
          **/
         public static function addFile($file,$var=NULL)
         {
+            self::log('< addFile()',7);
             $check_var = 'LANG';
             if ( isset( $var ) )
             {
@@ -293,18 +294,19 @@ if ( ! class_exists( 'wbLang', false ) )
                 $file .= '.php';
             foreach( self::$defaults['paths'] as $path )
             {
-                if(file_exists(wbValidate::path($path.'/'.$file)))
+                if(file_exists(self::path($path.'/'.$file)))
                 {
                     self::log(sprintf('found language file [%s] in path [%s]',$file,$path),7);
-                    self::checkFile( wbValidate::path($path.'/'.$file), $check_var );
+                    self::checkFile(self::path($path.'/'.$file), $check_var);
                     return true;
                 }
             }
             self::log(sprintf('language file [%s] not found!',$file),3);
+            self::log('< addFile()',7);
         } // end function addFile ()
 
         /**
-         * set language file path
+         * add language file path
          *
          * @access public
          * @param  string   $path  - existing directory
@@ -312,7 +314,9 @@ if ( ! class_exists( 'wbLang', false ) )
          **/
         public static function addPath($path,$var=NULL)
         {
-            $path = wbValidate::path($path);
+            self::log('> addPath()',7);
+            $path = self::path($path);
+            self::log(sprintf('trying to add path [%s]',$path),7);
             if ( file_exists($path) && is_dir($path) )
             {
                 self::log(sprintf('setting language path to [%s]',$path),7);
@@ -325,7 +329,34 @@ if ( ! class_exists( 'wbLang', false ) )
                 // error log
                 self::log(sprintf('not found (or not a directory): [%s]',$path),2);
             }
+            self::log('< addPath()',7);
         } // end function addPath()
+
+        /**
+         * (re)set language file path
+         *
+         * @access public
+         * @param  string   $path  - existing directory
+         * @return void
+         **/
+        public static function setPath($path,$var=NULL)
+        {
+            self::log('> setPath()',7);
+            $path = self::path($path);
+            self::log(sprintf('trying to set path [%s]',$path),7);
+            if ( file_exists($path) && is_dir($path) )
+            {
+                self::log(sprintf('setting language path to [%s]',$path),7);
+                self::$defaults['paths'] = array($path);
+            }
+            else
+            {
+                // we don't throw an exception here, just drop a message to the
+                // error log
+                self::log(sprintf('not found (or not a directory): [%s]',$path),2);
+            }
+            self::log('< setPath()',7);
+        } // end function setPath()
 
         /**
          * check for valid language file
@@ -417,110 +448,85 @@ if ( ! class_exists( 'wbLang', false ) )
             if ( self::$analog )
                 \Analog::log($message,$level);
         }   // end function log()
-        
-    }
 
-    /**
-     * array helper methods
-     *
-     * @category   wblib
-     * @package    wbArray
-     * @copyright  Copyright (c) 2013 BlackBird Webprogrammierung
-     * @license    GNU LESSER GENERAL PUBLIC LICENSE Version 3
-     */
-    if ( ! class_exists( 'wblib\wbArray', false ) )
-    {
-        class wbArray
+        /**
+         * array helper methods
+         */
+
+        /**
+         * Found here:
+         * http://www.php.net/manual/en/function.array-change-key-case.php#107715
+         **/
+        public static function array_change_key_case_unicode($arr, $c = CASE_LOWER) {
+            $c = ($c == CASE_LOWER) ? MB_CASE_LOWER : MB_CASE_UPPER;
+            foreach ($arr as $k => $v) {
+                $ret[mb_convert_case($k, $c, "UTF-8")] = $v;
+            }
+            return $ret;
+        }   // end function array_change_key_case_unicode()
+
+        /**
+         * sort an array
+         *
+         *
+         *
+         **/
+        public static function sort ( $array, $index, $order='asc', $natsort=FALSE, $case_sensitive=FALSE )
         {
-            /**
-             * Found here:
-             * http://www.php.net/manual/en/function.array-change-key-case.php#107715
-             **/
-            public static function array_change_key_case_unicode($arr, $c = CASE_LOWER) {
-                $c = ($c == CASE_LOWER) ? MB_CASE_LOWER : MB_CASE_UPPER;
-                foreach ($arr as $k => $v) {
-                    $ret[mb_convert_case($k, $c, "UTF-8")] = $v;
-                }
-                return $ret;
-            }   // end function array_change_key_case_unicode()
-
-            /**
-             * sort an array
-             *
-             *
-             *
-             **/
-            public static function sort ( $array, $index, $order='asc', $natsort=FALSE, $case_sensitive=FALSE )
-            {
-                if( is_array($array) && count($array)>0 ) {
-                     foreach(array_keys($array) as $key) {
-                         $temp[$key]=$array[$key][$index];
+            if( is_array($array) && count($array)>0 ) {
+                 foreach(array_keys($array) as $key) {
+                     $temp[$key]=$array[$key][$index];
+                 }
+                 if(!$natsort) {
+                     ($order=='asc')? asort($temp) : arsort($temp);
+                 }
+                 else {
+                     ($case_sensitive)? natsort($temp) : natcasesort($temp);
+                     if($order!='asc') {
+                         $temp=array_reverse($temp,TRUE);
                      }
-                     if(!$natsort) {
-                         ($order=='asc')? asort($temp) : arsort($temp);
-                     }
-                     else {
-                         ($case_sensitive)? natsort($temp) : natcasesort($temp);
-                         if($order!='asc') {
-                             $temp=array_reverse($temp,TRUE);
-                         }
-                     }
+                 }
 
-                     foreach(array_keys($temp) as $key) {
-                         (is_numeric($key))? $sorted[]=$array[$key] : $sorted[$key]=$array[$key];
-                     }
-                     return $sorted;
-                }
-                return $array;
-            }   // end function sort()
+                 foreach(array_keys($temp) as $key) {
+                     (is_numeric($key))? $sorted[]=$array[$key] : $sorted[$key]=$array[$key];
+                 }
+                 return $sorted;
+            }
+            return $array;
+        }   // end function sort()
 
-        }
-    }
-
-    /**
-     * validation helper methods
-     *
-     * @category   wblib2
-     * @package    wbValidate
-     * @copyright  Copyright (c) 2013 BlackBird Webprogrammierung
-     * @license    GNU LESSER GENERAL PUBLIC LICENSE Version 3
-     */
-    if ( ! class_exists( 'wblib\wbValidate', false ) )
-    {
-        class wbValidate
+        /**
+         * fixes a path by removing //, /../ and other things
+         *
+         * @access public
+         * @param  string  $path - path to fix
+         * @return string
+         **/
+        public static function path( $path )
         {
-            /**
-             * fixes a path by removing //, /../ and other things
-             *
-             * @access public
-             * @param  string  $path - path to fix
-             * @return string
-             **/
-            public static function path( $path )
+            // remove / at end of string; this will make sanitizePath fail otherwise!
+            $path       = preg_replace( '~/{1,}$~', '', $path );
+            // make all slashes forward
+            $path       = str_replace( '\\', '/', $path );
+            // bla/./bloo ==> bla/bloo
+            $path       = preg_replace('~/\./~', '/', $path);
+            // resolve /../
+            // loop through all the parts, popping whenever there's a .., pushing otherwise.
+            $parts      = array();
+            foreach ( explode('/', preg_replace('~/+~', '/', $path)) as $part )
             {
-                // remove / at end of string; this will make sanitizePath fail otherwise!
-                $path       = preg_replace( '~/{1,}$~', '', $path );
-                // make all slashes forward
-                $path       = str_replace( '\\', '/', $path );
-                // bla/./bloo ==> bla/bloo
-                $path       = preg_replace('~/\./~', '/', $path);
-                // resolve /../
-                // loop through all the parts, popping whenever there's a .., pushing otherwise.
-                $parts      = array();
-                foreach ( explode('/', preg_replace('~/+~', '/', $path)) as $part )
-                {
-                    if ($part === ".." || $part == '')
-                        array_pop($parts);
-                    elseif ($part!="")
-                        $parts[] = $part;
-                }
-                $new_path = implode("/", $parts);
-                // windows
-                if ( ! preg_match( '/^[a-z]\:/i', $new_path ) )
-                    $new_path = '/' . $new_path;
-                return $new_path;
-            }   // end function path()
-        }
+                if ($part === ".." || $part == '')
+                    array_pop($parts);
+                elseif ($part!="")
+                    $parts[] = $part;
+            }
+            $new_path = implode("/", $parts);
+            // windows
+            if ( ! preg_match( '/^[a-z]\:/i', $new_path ) )
+                $new_path = '/' . $new_path;
+            return $new_path;
+        }   // end function path()
+
     }
 
     class wbLangException extends \Exception {}

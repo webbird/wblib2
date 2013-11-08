@@ -39,7 +39,7 @@ namespace wblib;
  * @copyright  Copyright (c) 2013 BlackBird Webprogrammierung
  * @license    GNU LESSER GENERAL PUBLIC LICENSE Version 3
  */
-if ( ! class_exists( 'wbForms', false ) )
+if (!class_exists('wbForms',false))
 {
     /**
      * form builder base class
@@ -56,34 +56,138 @@ if ( ! class_exists( 'wbForms', false ) )
          **/
         private   static $analog     = NULL;
         /**
+         * log level
+         **/
+        protected static $loglevel   = 4;
+        /**
+         * space before log message
+         **/
+        protected static $spaces     = 0;
+        /**
+         * instance
+         **/
+        protected static $instance   = NULL;
+       /**
+         * common attributes for every element
+         **/
+        protected $attributes = array(
+            // HTML attributes
+            'accesskey'   => NULL,
+            'class'       => NULL,
+            'disabled'    => false,
+            'id'          => NULL,
+            'label'       => NULL,
+            'name'        => NULL,
+            'onblur'      => NULL,
+            'onchange'    => NULL,
+            'onclick'     => NULL,
+            'onfocus'     => NULL,
+            'onselect'    => NULL,
+            'readonly'    => NULL,
+            'required'    => NULL,
+            'style'       => NULL,
+            'tabindex'    => NULL,
+            'title'       => NULL,
+            'type'        => NULL,
+            'value'       => NULL,
+        );
+        /**
+         * self contained attributes (no attr="attr" markup)
+         **/
+        protected $simple_attr    = array(
+            'is_required' => 1,
+            'label'       => 1,
+            'label_style' => 1,
+            'label_span'  => 1,
+            'options'     => 1,
+            'action'      => 1,
+            'enctype'     => 1,
+            'content'     => 1,
+            'method'      => 1,
+            'form_class'  => 1,
+            'form_width'  => 1,
+            'fieldset'    => 1,
+            'notes'       => 1,
+        );
+        /**
+         * internal attributes
+         **/
+        protected $internal_attrs = array(
+            'allow'       => NULL,
+            'equal_to'    => NULL,
+            'infotext'    => NULL,
+            'invalid'     => NULL,
+            'is_required' => NULL,
+            'missing'     => NULL,
+            'is_group'    => NULL,
+            'notes'       => NULL,
+        );
+        /**
+         * element types with no value
+         **/
+        protected static $nodata = array(
+            'fieldset'    => 1,
+            'label'       => 1,
+            'legend'      => 1,
+            'submit'      => 1,
+            'reset'       => 1,
+        );
+        /**
          * accessor to wbLang if available
          **/
         private   static $wblang     = NULL;
         /**
-         * log level
+         * globals for all classes
          **/
-        protected static $loglevel   = 7;
-        /**
-         * global configuration options
-         **/
-        protected static $config     = array(
-            'blank_span'      => NULL,
-            'breaks'          => NULL,
-            'css'             => NULL,
-            'css_files'       => NULL,
-            'file'            => NULL,
-            'form_style'      => NULL,
-            'jquery'          => NULL,
-            'jquery_src'      => NULL,
-            'jquery_ui'       => NULL,
-            'jquery_ui_css'   => NULL,
-            'jquery_ui_src'   => NULL,
-            'jquery_ui_theme' => NULL,
-            'required_span'   => NULL,
-            'required_style'  => NULL,
-            'var'             => NULL,
-            'wrapperclass'    => NULL,
+        protected static $globals    = array(
+            'var'             => 'FORMS',
+            'path'            => NULL,
+            'fallback_path'   => NULL,
+            'workdir'         => NULL,
+            'add_breaks'      => true,
+            'required_span'   => '<span class="fbrequired" style="display:inline-block;width:16px;color:#B94A48;" title="This item is required">*</span>',
+            'blank_span'      => '<span class="fbblank" style="display:inline-block;width:16px;">&nbsp;</span>',
+            'label_align'     => 'right',
+            'token'           => NULL,
+            'token_lifetime'  => NULL,
+            'enable_hints'    => true,
         );
+        /**
+         * object attributes
+         **/
+        public   $attr              = array();
+
+        /**
+         * make static functions OOP
+         **/
+        public function __call($method, $args)
+        {
+            self::log('> __call()',7);
+            self::log(sprintf('searching for method [%s]',$method),7);
+            if(count($args))
+                self::log('args',var_export($args,1),7);
+            if ( ! isset($this) || ! is_object($this) )
+            {
+                self::log('< __call() - returning false (method not found)',7);
+                return false;
+            }
+            if ( method_exists( $this, $method ) )
+            {
+                self::log(sprintf('< __call() - calling method [%s]',$method),7);
+                return call_user_func_array(array($this, $method), $args);
+            }
+            self::log('< __call()',7);
+        }   // end function __call()
+
+        /**
+         * no cloning!
+         **/
+        private final function __clone()     {}
+
+        /**
+         * do not allow to create an instance directly
+         **/
+        protected     function __construct() {}
 
         /**
          * accessor to wbLang (if available)
@@ -94,13 +198,25 @@ if ( ! class_exists( 'wbForms', false ) )
          * @param  string    $msg
          * @return string
          **/
-        protected static function t($message)
+        public static function t($message)
         {
+            self::log('<t()',7);
             if( !self::$wblang && !self::$wblang == -1)
             {
                 try
                 {
+                    @include_once dirname(__FILE__).'/wbLang.php';
                     self::$wblang = wbLang::getInstance();
+                    self::log(sprintf('wbLang loaded, current language [%s]',self::$wblang->current()),7);
+                    $callstack = debug_backtrace();
+                    $caller    = array_pop($callstack);
+                    if(isset($caller['file']))
+                    {
+                        if(is_dir(self::path(pathinfo($caller['file'],PATHINFO_DIRNAME).'/languages')))
+                            self::$wblang->addPath(self::path(pathinfo($caller['file'],PATHINFO_DIRNAME).'/languages'));
+                        if(file_exists(self::path(pathinfo($caller['file'],PATHINFO_DIRNAME).'/languages/'.self::$wblang->current().'.php')))
+                            self::$wblang->addFile(self::$wblang->current());
+                    }
                 }
                 catch ( wbFormsExection $e )
                 {
@@ -109,26 +225,70 @@ if ( ! class_exists( 'wbForms', false ) )
                 }
             }
             if( self::$wblang !== -1 )
+            {
+                self::log('<t(translated)',7);
                 return self::$wblang->t($message);
+            }
             else
+            {
+                self::log('<t(original)',7);
                 return $message;
+            }
         }   // end function t()
 
         /**
-         * setter for configuration options
          *
          * @access public
-         * @param  mixed  $key   - config key or array of key-value-pairs
-         * @param  string $value - if $key is a string, this is the value
-         * @return void
+         * @return
          **/
-        public static function config($key,$value=NULL)
+        public static function hint($message)
         {
-            if(!is_array($key) && $value!==NULL)
-                $key = array( $key => $value );
-            foreach( $key as $k => $v )
-                self::$config[$k] = $v;
-        }   // end function config()
+            if(self::$globals['enable_hints'])
+            {
+                $forms = '';
+                if(count(wbForms::$FORMS))
+                    foreach(wbForms::$FORMS as $name => $elem)
+                        $forms .= sprintf(
+                            '<tr><td>%s</td><td>%s</td></tr>',
+                            $name,count($elem)
+                        );
+                else
+                    $forms = '<tr><td colspan="2">none</td></tr>';
+
+                echo sprintf('<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+                    <html>
+                      <head>
+                      <meta http-equiv="content-type" content="text/html; charset=windows-1250">
+                      <title>%s</title>
+                      <style type="text/css" media="screen">
+                      body,html{width:100%%;height:100%%;margin:0;padding:0;}
+                      body{background:#006699;font-family: Verdana, Geneva, Tahoma, sans-serif;filter: progid:DXImageTransform.Microsoft.gradient(startColorstr=\'#006699\', endColorstr=\'#FFFFFF\');background: -webkit-gradient(linear, left top, left bottom, from(#006699), to(#FFFFFF));background: -moz-linear-gradient(top,  #006699, #FFFFFF);}
+                      div{width:75%%;margin:5%% auto auto auto;padding:15px;background-color:#fff;-webkit-border-radius: 5px;-moz-border-radius: 5px;-khtml-border-radius: 5px;border-radius: 5px;-moz-box-shadow: 5px 5px 5px #000000;-webkit-box-shadow: 5px 5px 5px #000000;box-shadow: 5px 5px 5px #000000;}
+                      table{min-width:40%%;}
+                      th{background-color:#aecede;padding:5px;}
+                      td{padding:5px;}
+                      </style>
+                      </head>
+                      <body>
+                        <div>
+                          <h1>%s</h1>
+                          %s<br /><br />
+                          <table>
+                            <thead>
+                              <tr><th colspan="2">Available (loaded) forms</th></tr>
+                              <tr><th>Name</th><th>Elements</th></tr>
+                            </thead>
+                            <tbody>
+                              %s
+                            </tbody>
+                          </table>
+                        </div>
+                      </body>
+                    </html>',
+                    self::t('wbForms Notice'),self::t('wbForms Notice'),self::t($message),$forms
+                );
+            }
+        }   // end function hint()
 
         /**
          * accessor to Analog (if installed)
@@ -136,11 +296,11 @@ if ( ! class_exists( 'wbForms', false ) )
          * Note: Log messages are ignored if no Analog is available!
          *
          * @access protected
-         * @param  string   $message
-         * @param  integer  $level
-         * @return
+         * @param  string   $message - log message
+         * @param  integer  $level   - log level; default: 3 (error)
+         * @return void
          **/
-        protected static function log($message, $level = 3)
+        public static function log($message, $level = 3)
         {
             $class = get_called_class();
             if($level>$class::$loglevel) return;
@@ -158,9 +318,207 @@ if ( ! class_exists( 'wbForms', false ) )
                 }
             }
             if ( self::$analog !== -1 )
-                \Analog::log($message,$level);
+            {
+                if(substr($message,0,1)=='<')
+                    self::$spaces--;
+                self::$spaces = ( self::$spaces > 0 ? self::$spaces : 0 );
+                $line = str_repeat('    ',self::$spaces).$message;
+                if(substr($message,0,1)=='>')
+                    self::$spaces++;
+                \Analog::log($line,$level);
+            }
         }   // end function log()
-    }
+
+        /**
+         * fixes a path by removing //, /../ and other things
+         *
+         * @access public
+         * @param  string  $path - path to fix
+         * @return string
+         **/
+        public static function path( $path )
+        {
+            // remove / at end of string; this will make sanitizePath fail otherwise!
+            $path       = preg_replace( '~/{1,}$~', '', $path );
+            // make all slashes forward
+            $path       = str_replace( '\\', '/', $path );
+            // bla/./bloo ==> bla/bloo
+            $path       = preg_replace('~/\./~', '/', $path);
+            // resolve /../
+            // loop through all the parts, popping whenever there's a .., pushing otherwise.
+            $parts      = array();
+            foreach ( explode('/', preg_replace('~/+~', '/', $path)) as $part )
+            {
+                if ($part === ".." || $part == '')
+                    array_pop($parts);
+                elseif ($part!="")
+                    $parts[] = $part;
+            }
+            $new_path = implode("/", $parts);
+            // windows
+            if ( ! preg_match( '/^[a-z]\:/i', $new_path ) )
+                $new_path = '/' . $new_path;
+            return $new_path;
+        }   // end function path()
+
+        /**
+         * generates an unique element name if none is given
+         *
+         * @access protected
+         * @param  integer  $length
+         * @return string
+         **/
+        protected static function generateName( $length = 5 ) {
+            for(
+                   $code_length = $length, $newcode = '';
+                   strlen($newcode) < $code_length;
+                   $newcode .= chr(!rand(0, 2) ? rand(48, 57) : (!rand(0, 1) ? rand(65, 90) : rand(97, 122)))
+            );
+            return 'fbformfield_'.$newcode;
+        }   // end function generateName()
+
+        /**
+         * replaces the placeholders in the output template with the
+         * appropriate element options
+         *
+         * @access protected
+         * @return string
+         **/
+        protected function replaceAttr()
+        {
+            $class  = get_called_class();
+            $output = $class::$tpl;
+
+            self::log(sprintf('output template for class [%s]',$class),7);
+            self::log($output,7);
+            self::log('element data',7);
+            self::log(var_export($this->attr,1),7);
+
+            if(
+                   isset($this->attr['label'])
+                && !$this instanceof wbFormsElementLabel
+                && !$this instanceof wbFormsElementLegend
+                && !$this instanceof wbFormsElementButton
+            ) {
+                $this->checkAttr();
+                $label = new wbFormsElementLabel(
+                    array(
+                        'for'      => $this->attr['id'],
+                        'label'    => self::t($this->attr['label']),
+                        'class'    => 'fblabel',
+                        'is_radio' =>
+                            (
+                                (
+                                       substr($this->attr['type'],0,5) == 'radio'
+                                    || substr($this->attr['type'],0,8) == 'checkbox'
+                                )
+                                ? true
+                                : false
+                            ),
+                    )
+                );
+                $label->checkAttr();
+                $this->attr['label'] = $label->render();
+            }
+
+            if($this instanceof wbFormsElementLegend)
+                $this->attr['label'] = self::t($this->attr['label']);
+
+            if(!isset($this->attr['class']) && isset($this->attr['type']))
+                $this->attr['class'] = 'fb'.strtolower($this->attr['type']);
+
+            if(isset($this->attr['name']) && isset(wbForms::$ERRORS[$this->attr['name']]))
+            {
+                $this->attr['class'] .= ' ui-state-highlight';
+                $this->attr['notes']  = '<br /><span class="fbnote fberror">'
+                                      . self::t(wbForms::$ERRORS[$this->attr['name']])
+                                      . '</span>'
+                                      . "\n"
+                                      ;
+            }
+
+            $replace = $with = array();
+            foreach(array_keys($this->attributes) as $attr)
+            {
+                if(isset($this->attr[$attr]) && $this->attr[$attr] != '')
+                {
+                    $replace[] = '%'.$attr.'%';
+                    $with[]    = ( isset($this->simple_attr[$attr]) )
+                               ? $this->attr[$attr]
+                               : ' '.$attr.'="'.$this->attr[$attr].'"'
+                               ;
+                }
+            }
+            foreach(array_keys($this->internal_attrs) as $attr)
+            {
+                if(isset($this->attr[$attr]) && $this->attr[$attr] != '')
+                {
+                    $replace[] = '%'.$attr.'%';
+                    $with[]    = ( isset($this->simple_attr[$attr]) )
+                               ? $this->attr[$attr]
+                               : ' '.$attr.'="'.$this->attr[$attr].'"'
+                               ;
+                }
+            }
+            self::log('replace',7);
+            self::log(var_export($replace,1),7);
+            self::log('with',7);
+            self::log(var_export($with,1),7);
+
+            $output = str_ireplace(
+                $replace,
+                $with,
+                $output
+            );
+            self::log('template after replacing normal placeholders',7);
+            self::log($output,7);
+
+            // remove any placeholders not replaced yet
+            $output = preg_replace( '~%\w+%~', '', $output );
+            self::log('template after removing additional placeholders',7);
+            self::log($output,7);
+
+            return $output
+                . (
+                      (
+                             wbForms::$globals['add_breaks']
+                          && !$this instanceof wbFormsElementFieldset
+                          && !$this instanceof wbFormsElementLegend
+                          && !$this instanceof wbFormsElementLabel
+                          && !$this instanceof wbFormsElementButton
+                          && !$this instanceof wbFormsElementRadio
+                      )
+                    ? "<br />\n"
+                    : ''
+                  );
+        }   // end function replaceAttr()
+
+        /**
+         *
+         * @access public
+         * @return
+         **/
+        public static function set($global,$value)
+        {
+            $class = get_called_class();
+            $class::$globals[$global] = $value;
+        }   // end function set()
+
+        /**
+         * set attribute value(s)
+         *
+         * @access public
+         * @return
+         **/
+        public function setAttr($attr,$value)
+        {
+            self::log('> setAttr()',7);
+            $this->attr[$attr] = $value;
+            self::log('> setAttr()',7);
+        }   // end function setAttr()
+
+
+    }   // ----------    end class wbFormsBase    ----------
 
     /**
      * form builder form class
@@ -173,131 +531,59 @@ if ( ! class_exists( 'wbForms', false ) )
     class wbForms extends wbFormsBase
     {
         /**
-         * array of named instances (=forms)
+         * list of additional CSS to load
+         * public because wbFormsJQuery class uses it
          **/
-        protected static $instances  = array();
+        public    static $CSS        = array();
         /**
-         * log level
+         *
          **/
-        protected static $loglevel   = 7;
+        public    static $INLINECSS  = array();
+        /**
+         * same for JavaScripts
+         **/
+        public    static $JS         = array();
+        /**
+         * inline JavaScript
+         **/
+        public    static $INLINEJS   = array();
         /**
          * array of known forms
          **/
         protected static $FORMS      = array();
         /**
-         * name of current form (set by setForm())
+         *
          **/
         protected static $CURRENT    = NULL;
         /**
-         * output template
+         * current form elements (list of objects)
          **/
-        protected static $tpl
-            = "<div class=\"%wrapperclass%\">\n<form action=\"%action%\" enctype=\"%enctype%\" method=\"%method%\" name=\"%name%\" id=\"%id%\" %class%%style%>\n%content%\n</form>\n</div>\n";
+        protected static $ELEMENTS   = array();
+        /**
+         * validated form data
+         **/
+        protected static $DATA       = array();
+        /**
+         * list of errors
+         **/
+        protected static $ERRORS     = array();
+        /**
+         * list of already loaded files
+         **/
+        protected static $LOADED     = array();
         /**
          * form attribute defaults
          **/
-        protected static $attributes = array(
-            // <form> attributes
-            'action'       => NULL,
-            'method'       => 'post',
-            'id'           => NULL,
-            'name'         => NULL,
-            'class'        => 'ui-widget',
-            'enctype'      => 'application/x-www-form-urlencoded',
-            // internal attributes
-            'content'      => NULL,
-            'width'        => NULL,
-            'wrapperclass' => NULL,
-        );
+        protected        $attributes = array();
         /**
-         * current form attributes
-         **/
-        protected $attr      = array();
-
-        /**
-         * no cloning!
-         **/
-        private function __clone() {}
-
-        /**
-         * make static functions OOP
-         **/
-        public function __call($method, $args)
-        {
-            self::log(sprintf('searching for method [%s]',$method),7);
-            if(count($args))
-                self::log('args',var_export($args,1),7);
-            if ( ! isset($this) || ! is_object($this) )
-                return false;
-            if ( method_exists( $this, $method ) )
-                return call_user_func_array(array($this, $method), $args);
-        }   // end function __call()
-
-        /**
-         * constructor; private to make sure that it can only be called
-         * using getInstance()
          *
-         * resets the global config settings!
          **/
-        private function __construct() {
-            self::resetGlobals();
-        }   // end function __construct()
-
+        public           $attr       = array();
         /**
-         * resets all configuration options to their defaults
-         *
-         * @access public
-         * @return void
+         * output template
          **/
-        public static function resetGlobals()
-        {
-            self::$config = array(
-                // default forms definition file name
-                'file'            => 'inc.forms.php',
-                // default variable name
-                'var'             => 'FORMS',
-                // add breaks (<br />) after each element
-                'breaks'          => true,
-                // <form> style
-                'form_style'      => 'width:800px;margin:10px auto;',
-                // inline css
-                'css'             => array(),
-                // list of custom css files to add
-                'css_files'       => array(),
-                // form wrapper div class
-                'wrapperclass'    => 'fbform',
-                // markup for required fields
-                'required_span'   => '<span class="fbrequired" style="display:inline-block;width:15px;color:#B94A48;">*</span>',
-                // if field is not required, print this instead
-                'blank_span'      => '<span class="fbblank" style="display:inline-block;width:15px;">&nbsp;</span>',
-                //
-                'required_style'  => NULL,
-                // button line
-                'button_line'     => '<div class="ui-dialog-buttonpane" style="float:right;">%buttons%</div>',
-            // ----- jQuery UI options -----
-                // load jQuery core
-                'jquery'          => true,
-                // load jQuery UI
-                'jquery_ui'       => true,
-                // jQuery Core CDN
-                'jquery_src'      => 'https://ajax.googleapis.com/ajax/libs/jquery/2.0.3/jquery.min.js',
-                // jQuery UI CDN
-                'jquery_ui_src'   => 'https://ajax.googleapis.com/ajax/libs/jqueryui/1/jquery-ui.min.js',
-                // jQuery UI theme CDN
-                'jquery_ui_css'   => 'https://ajax.googleapis.com/ajax/libs/jqueryui/1.10.3/themes/%theme%/jquery-ui.min.css',
-                // theme name
-                'jquery_ui_theme' => 'sunny',
-            );
-            // default paths to search inc.forms.php
-            $callstack = debug_backtrace();
-            self::$config['workdir']
-                = ( isset($callstack[1]) && isset($callstack[1]['file']) )
-                ? wbValidate::path(realpath(dirname($callstack[0]['file'])))
-                : wbValidate::path(realpath(dirname(__FILE__)));
-            self::$config['path'] = self::$config['workdir'].'/forms';
-            self::$config['fallback_path'] = self::$config['workdir'].'/forms';
-        }   // end function resetGlobals()
-        
+        protected static $tpl        = NULL;
+
         /**
          * Create an instance
          *
@@ -305,13 +591,26 @@ if ( ! class_exists( 'wbForms', false ) )
          * @param  string  $name - optional name, default: 'default'
          * @return object
          **/
-        public static function getInstance($name='default')
+        public static function getInstance()
         {
-            if ( !array_key_exists( $name, self::$instances ) ) {
-                self::log(sprintf('creating new instance with name [%s]',$name),7);
-                self::$instances[$name] = new self();
+            self::log('> getInstance()',7);
+            if(!is_object(self::$instance))
+            {
+                self::log('creating new instance',7);
+                self::$instance = new wbForms();
+                wbFormsJQuery::init();
             }
-            return self::$instances[$name];
+            // default paths to search inc.forms.php
+            $callstack = debug_backtrace();
+            self::$globals['workdir']
+                = ( isset($callstack[1]) && isset($callstack[1]['file']) )
+                ? self::path(realpath(dirname($callstack[0]['file'])))
+                : self::path(realpath(dirname(__FILE__)));
+            self::$globals['path']          = self::$globals['workdir'].'/forms';
+            self::$globals['fallback_path'] = self::$globals['workdir'].'/forms';
+            self::$globals['token']         = 'alsdkjfaklösdfj';
+            self::log('< getInstance()',7);
+            return self::$instance;
         }   // end function getInstance()
 
         /**
@@ -327,11 +626,13 @@ if ( ! class_exists( 'wbForms', false ) )
          * @param  string  $var  - optional var name (default: '$FORMS')
          * @return object
          **/
-        public static function getInstanceFromFile($name='default',$file='inc.forms.php',$path=NULL,$var=NULL)
+        public static function getInstanceFromFile($file='inc.forms.php',$path=NULL,$var=NULL)
         {
-            self::resetGlobals();
+            self::log('> getInstanceFromFile()',7);
+            $obj = self::getInstance();
             self::loadFile($file,$path,$var);
-            return self::getInstance($name);
+            self::log('< getInstanceFromFile()',7);
+            return $obj;
         }   // end function getInstanceFromFile()
 
         /**
@@ -343,18 +644,20 @@ if ( ! class_exists( 'wbForms', false ) )
          * @param  string  $var  - optional var name (default: '$FORMS')
          * @return void
          **/
-        public static function loadFile($file = 'inc.forms.php', $path = NULL, $var = NULL)
+        public static function loadFile($file='inc.forms.php', $path=NULL, $var=NULL)
         {
-            $var = ( $var ? $var : self::$config['var'] );
+            self::log('> loadFile()',7);
+            self::log(sprintf('params: file [%s], path [%s], var [%s]',$file,$path,$var),7);
+            $var = ( $var ? $var : self::$globals['var'] );
             if(!file_exists($file))
             {
                 $search_paths = array(
-                    self::$config['workdir'],
-                    self::$config['path'],
-                    self::$config['fallback_path']
+                    self::$globals['workdir'],
+                    self::$globals['path'],
+                    self::$globals['fallback_path']
                 );
                 if($path)
-                    array_unshift( $search_paths, $path );
+                    array_unshift( $search_paths, self::path($path) );
                 foreach($search_paths as $path)
                 {
                     if(file_exists($path.'/'.$file))
@@ -369,30 +672,37 @@ if ( ! class_exists( 'wbForms', false ) )
                     sprintf(
                         "Configuration file [%s] not found in the possible search paths!\n[%s]",
                         $file,
-                        str_replace(' ', '    ',var_export($search_paths,1))
+                        var_export($search_paths,1)
                     )
                 );
 
-            try
+            if(isset(self::$LOADED[$file]))
             {
-                include $file;
-                $ref = NULL;
-                eval("\$ref = & \$".$var.";");
-                if (isset($ref) && is_array($ref)) {
-                    self::log('adding form data: '.str_replace(' ', '    ',var_export($ref,1)),7);
-                    self::$FORMS = array_merge(self::$FORMS, $ref);
+                self::log('already loaded',7);
+            }
+            else
+            {
+                try
+                {
+                    self::log(sprintf('loading file [%s]',$file),7);
+                    include $file;
+                    $ref = NULL;
+                    eval("\$ref = & \$".$var.";");
+                    if (isset($ref) && is_array($ref)) {
+                        self::log('adding form data',7);
+                        self::log(var_export($ref,1),7);
+                        self::$FORMS = array_merge(self::$FORMS, $ref);
+                    }
+                    self::$LOADED[$file] = 1;
+                }
+                catch ( wbFormsException $e )
+                {
+                    self::log(sprintf('unable to load the file, exception [%s]',$e->getMessage()),3);
                 }
             }
-            catch ( wbFormsException $e )
-            {
-                self::log(sprintf('unable to load the file, exception [%s]',$e->getMessage()));
-            }
 
+            self::log('< loadFile()',7);
         }   // end function loadFile()
-
-        /***********************************************************************
-         *    NON STATIC METHODS
-         **********************************************************************/
 
         /**
          * allows to add custom css files; they will be loaded into the HTML
@@ -402,62 +712,253 @@ if ( ! class_exists( 'wbForms', false ) )
          * @param  string  $url
          * @return
          **/
-        public function addCSSLink($url)
+        public static function addCSSLink($url)
         {
-            self::$config['css_files'][] = $url;
+            self::log('> addCSSLink()',7);
+            self::$CSS[] = $url;
+            self::log('< addCSSLink()',7);
         }   // end function addCSSLink()
 
         /**
-         * allows to add custom css; will be loaded into the HTML
-         * header using JavaScript (jQuery)
+         * allows to add custom CSS; will be loaded into the HTML
+         * header using JavaScript (jQuery) or getHeaders()
          *
          * @access public
          * @param  string  $css
          * @return
          **/
-        public function addCSS($css)
+        public static function addCSS($css)
         {
-            if(is_array($css))
-                self::$config['css']
-                    = array_merge(
-                          self::$config['css'],
-                          $css
-                      );
-            else
-                self::$config['css'][] = $css;
-        }   // end function addCSS()
+            self::log('> addCSS()',7);
+            self::$INLINECSS[] = $css;
+            self::log('< addCSS()',7);
+        }   // end function addCSSLink()
 
         /**
-         * creates a button line (a list of submit buttons enclosed in a div)
+         * allows to add custom css files; they will be loaded into the HTML
+         * header using JavaScript (jQuery)
          *
          * @access public
-         * @return string
+         * @param  string  $url
+         * @return
          **/
-        public function getButtonline()
+        public static function addJSLink($url,$attr=NULL)
         {
-            // add default buttons (submit, reset)
-            $output  = wbFormsElementButton::get(
-                array(
-                    'id'      => 'submit_'.wbForms::$CURRENT,
-                    'label'   => 'Submit',
-                    'style'   => 'float:left',
-                    'onclick' => "$('#".wbForms::$CURRENT."').submit()",
-                ))->render();
-            $output .= wbFormsElementButton::get(
-                array(
-                    'id'      => 'reset_'.wbForms::$CURRENT,
-                    'label'   => 'Reset',
-                    'style'   => 'float:left',
-                    'onclick' => "getElementById('".wbForms::$CURRENT."').reset();",
-                ))->render();
-            wbFormsJQuery::addComponent('submit_'.wbForms::$CURRENT,'button', 'icons: { primary: "ui-icon-circle-check" }');
-            wbFormsJQuery::addComponent('reset_'.wbForms::$CURRENT,'button', 'icons: { primary: "ui-icon-closethick" }');
-            return str_ireplace(
-                '%buttons%',
-                $output,
-                self::$config['button_line']
+            self::log('> addJSLink()',7);
+            self::$JS[] = array(
+                'src'  => $url,
+                'attr' => $attr,
             );
-        }   // end function getButtonline()
+            self::log('< addJSLink()',7);
+        }   // end function addJSLink()
+
+        /**
+         *
+         *
+         *
+         *
+         **/
+        public static function addJS($code)
+        {
+            self::log('> addJS()',7);
+            self::$INLINEJS[] = $code;
+            self::log('< addJS()',7);
+        }   // end function addJS()
+
+        /**
+         * add an element to the current form
+         *
+         * @access public
+         * @param  array   $elem
+         * @param  string  $elem_name  - insert after 'name'
+         * @param  string  $where      - insert 'before' or 'after', default 'after'
+         * @return void
+         **/
+        public static function addElement($elem,$elem_name=NULL,$where='after')
+        {
+            self::log('> addElement()',7);
+
+            $name    = self::current();
+            $element = NULL;
+
+            if(!isset($elem['type']))
+                $elem['type'] = 'text';
+            if(!isset($elem['name']))
+                $elem['name'] = wbFormsElement::generateName();
+            if(!isset($elem['id']))
+                $elem['id'] = $elem['name'];
+
+            // check if element exists
+            if(!self::hasElement($elem['name']))
+            {
+                $i = -1;
+
+                // if $before or $after are set...
+                if($elem_name)
+                {
+                    // ...get insert position
+                    self::log(sprintf('searching for element [%s] to add [%s]',$elem_name,$where),7);
+                    $i    = self::hasElement($elem_name);
+                    self::log(sprintf('pos [%s]',$i),7);
+                    if($i)
+                        if($where=='after')
+                            $i++;
+                    else
+                        $i = -1;
+                }
+                else
+                {
+                    if($where=='before')
+                        $i = key(end(self::$ELEMENTS));
+                }
+
+                self::log(sprintf('insert position [%s]',$i),7);
+                if(!isset(self::$ELEMENTS[$name]) || !is_array(self::$ELEMENTS[$name]))
+                    self::$ELEMENTS[$name] = array();
+                array_splice(self::$ELEMENTS[$name],$i,0,array($elem));
+
+                // 'create' element
+                if(isset($elem['type']))
+                {
+                    self::log(sprintf('creating element of type [%s]',$elem['type']),7);
+                    $classname = '\wblib\wbFormsElement'.ucfirst(strtolower($elem['type']));
+                    self::log(sprintf('classname [%s]',$classname),7);
+                    if(class_exists($classname))
+                        $element = $classname::get($elem);
+                }
+
+                if(!$element)
+                    $element =  wbFormsElement::get($elem);
+
+                if(!isset(self::$ELEMENTS[$name]) || !count(self::$ELEMENTS[$name]) || $i == -1)
+                {
+                    self::$ELEMENTS[$name][] = $element;
+                }
+                else
+                {
+//echo "INSERTING AT OFFSET [$i], ELEMENT INDEX IS [$i]<br />";
+                    // create a placeholder, als array_splice does not work
+                    // with objects as replacement
+                    array_splice(self::$ELEMENTS[$name],$i,0,'EMPTY');
+                    // replace new index with element
+                    self::$ELEMENTS[$name][$i] = $element;
+                }
+
+                self::log('< addElement() (inside if)',7);
+                return $element;
+            }
+            self::log('< addElement()',7);
+        }   // end function addElement()
+        
+
+        /**
+         *
+         * @access public
+         * @return
+         **/
+        public static function current()
+        {
+            return self::$CURRENT;
+        }   // end function current()
+
+        /**
+         * set attribute value(s)
+         *
+         * @access public
+         * @return
+         **/
+        public function setAttr($attr,$value)
+        {
+            $f = wbFormsElementForm::get();
+            $f->attr[$attr] = $value;
+        }
+
+        /**
+         *
+         * @access public
+         * @return
+         **/
+        public static function setData($data)
+        {
+            self::log('> setData()',7);
+            self::log(var_export($data,1),7);
+            if(!is_array($data))
+                return false;
+            $name = self::$CURRENT;
+            foreach($data as $elem => $value)
+            {
+                self::log(sprintf('searching for element [%s]',$elem),7);
+                if(!self::hasElement($elem))
+                    continue;
+                $obj   = self::getElement($elem);
+                $field = $obj->valueattr();
+                self::log(sprintf('setting key [%s] to value [%s]',$field,var_export($value,1)),7);
+                $obj->setAttr($field,$value);
+            }
+            self::log('< setData()',7);
+        }   // end function setData()
+
+        /**
+         * set info text shown above the form
+         *
+         * @access public
+         * @param  string  $info
+         * @return
+         **/
+        public static function setInfo($info,$class=NULL)
+        {
+            self::log('> setInfo()',7);
+            $name = self::$CURRENT;
+            if(!self::hasElement('__wbForms_info__'))
+                self::addElement(
+                    array(
+                        'type'  => 'info',
+                        'name'  => '__wbForms_info__',
+                        'label' => $info,
+                        'class' => ( $class ? $class : NULL )
+                    ),
+                    NULL,
+                    'before'
+                );
+            self::log('< setInfo()',7);
+        }   // end function setInfo()
+        
+        /**
+         * loads the form elements; this allows to call printHeaders() to load
+         * all the CSS and JS into the <head>
+         *
+         * @access public
+         * @param  string  $name   - form name
+         * @return boolean
+         **/
+        public static function setForm($name='default')
+        {
+            self::log('> setForm()',7);
+            if(isset(self::$FORMS[$name]))
+            {
+                self::log(sprintf('Current form [%s]',$name),7);
+                wbForms::$CURRENT = $name;
+                if(!count(self::$FORMS[$name]))
+                {
+                    self::log(sprintf('Required form [%s] has no elements!',$name),4);
+                    self::log('< setForm(false) - no elements',7);
+                    return false;
+                }
+                // initialize elements
+                foreach(self::$FORMS[$name] as $elem)
+                    if(is_array($elem))
+                        self::addElement($elem);
+                self::log('< setForm(true) (init)',7);
+                return true;
+            }
+            self::log(sprintf('No such form! [%s]',$name),3);
+            self::log('< setForm(false)',7);
+            return false;
+        }   // end function setForm()
+
+        /***********************************************************************
+         *    NON STATIC METHODS
+         **********************************************************************/
 
         /**
          * get (render) the form; direct output (echo) by default
@@ -467,136 +968,423 @@ if ( ! class_exists( 'wbForms', false ) )
          * @param  boolean $return - set to true to return the HTML
          * @return string
          **/
-        public function getForm($name='default',$return=false)
+        public function getForm($name=NULL,$return=true)
         {
-            // set $CURRENT
-            $this->setForm($name);
+            self::log('> getForm()',7);
 
-            // check if the form is available and has components
-            if(!isset(self::$FORMS[$name]))
+            if(!$name) $name = self::$CURRENT;
+            if(!$name)
             {
-                self::log(sprintf('Required form [%s] not found!',$name),4);
-                return false;
-            }
-            if(!count(self::$FORMS[$name]))
-            {
-                self::log(sprintf('Required form [%s] has no elements!',$name),4);
-                return false;
+                self::hint('[getForm()] No form set; you need to use <tt>setForm(&lt;NAME&gt;)</tt> first!');
+                self::log('< getForm() - exit (no form set)',7);
+                exit;
             }
 
-            // render the elements
+            if(!count(self::$ELEMENTS[$name]))
+                $this->setForm($name);
+
+            if($this->isSent())
+                $this->validateForm();
+
+            self::log('elements: '.var_export(self::$ELEMENTS,1),7);
+
+            // render elements
             $elements = array();
-            foreach(self::$FORMS[$name] as $elem)
-            {
-                $classname = 'wblib\wbFormsElement'.ucfirst(strtolower($elem['type']));
-                if(class_exists($classname))
-                {
-                    $elements[] = $classname::get($elem)->render();
-                    continue;
-                }
-                $elements[] = wbFormsElement::get($elem)->render();
-            }
+            foreach(self::$ELEMENTS[$name] as $elem)
+                if(is_object($elem))
+                    $elements[] = $elem->render();
+
+            // add hidden element to check if the form was sent
+            if(!self::hasElement('submit_'.$name))
+                $elements[] = wbFormsElement::get(array('type'=>'hidden','name'=>'submit_'.$name,'value'=>1))->render();
+
+            // CSRF token
+            wbFormsProtect::$config['token_lifetime'] = self::$globals['token_lifetime'];
+            $elements[] = wbFormsElement::get(wbFormsProtect::getToken(self::$globals['token']))->render();
 
             // make sure we have a submit button
-            $elements[] = self::getButtonline();
+            if(!self::hasButton())
+                $elements[] = wbFormsElementSubmit::get(array('label'=>'Submit'))->render();
+
+            self::log('< getForm()',7);
 
             // finish the form
             if ( count($elements) )
             {
-                if (!$return) echo   self::render(implode('',$elements));
-                else          return self::render(implode('',$elements));
+                if (!$return) echo   wbFormsElementForm::get()->render(implode('',$elements));
+                else          return wbFormsElementForm::get()->render(implode('',$elements));
             }
         }   // end function getForm()
 
         /**
-         * loads the form elements; this allows to call printHeaders() to load
-         * all the CSS and JS into the <head>
          *
          * @access public
-         * @param  string  $name   - form name
+         * @return
+         **/
+        public static function printForm($name=NULL)
+        {
+            return self::getForm($name,false);
+        }   // end function printForm()
+
+        /**
+         *
+         * @access public
+         * @return
+         **/
+        public function getHeaders()
+        {
+            return wbFormsJQuery::getHeaders();
+        }   // end function getHeaders()
+
+        /**
+         * tries to find element $name in ELEMENTS array; returns the
+         * element (object) on success, false otherwise
+         *
+         * @access public
+         * @param  string  $name - element name
+         * @return mixed
+         **/
+        public static function getElement($name)
+        {
+            self::log('> getElement()',7);
+            $formname = self::current();
+            self::log(sprintf('searching for element with name [%s], form [%s]',$name,$formname),7);
+            if(($index=self::hasElement($name))!==false)
+            {
+                self::log(sprintf('element found at index [%d]',$index),7);
+                self::log(var_export(self::$ELEMENTS[$formname][$index],1),7);
+                self::log('< getElement()',7);
+                return self::$ELEMENTS[$formname][$index];
+            }
+            self::log('< getElement() not found',7);
+        }   // end function getElement()
+
+        /**
+         *
+         * @access public
+         * @return
+         **/
+        public static function getElements($ignore_hidden=false,$ignore_labels=false)
+        {
+            self::log('> getElements()',7);
+            $formname = self::current();
+            if(isset(self::$FORMS[$formname]) && count(self::$FORMS[$formname]))
+            {
+                if($ignore_hidden || $ignore_labels)
+                {
+                    $elem = array();
+                    foreach(self::$FORMS[$formname] as $item)
+                    {
+                        if($ignore_hidden && $item['type'] == 'hidden')
+                            continue;
+                        if($ignore_labels && $item['type'] == 'legend')
+                            continue;
+                        $elem[] = $item;
+                    }
+                    self::log(sprintf('< getElements() - [%s] elements returned (filtered)',count($elem)),7);
+                    return $elem;
+                }
+                self::log(sprintf('< getElements() - [%s] elements returned',count(self::$FORMS[$formname])),7);
+                return self::$FORMS[$formname];
+            }
+            self::log('< getElements() - no elements',7);
+            return false;
+        }   // end function getElements()
+        
+
+        /**
+         *
+         * @access public
+         * @return
+         **/
+        public static function getErrors()
+        {
+echo "wbForms::getErrors()<textarea cols=\"100\" rows=\"20\" style=\"width: 100%;\">";
+print_r( self::$ERRORS );
+echo "</textarea>";
+        }   // end function getErrors()
+
+        /**
+         * returns the validated form data
+         *
+         * @access public
+         * @param  boolean $always_return - returns valid data even if the form is not valid
+         * @param  boolean $get_empty     - retrieve empty values too; default: false
+         * @return array
+         **/
+        public static function getData($always_return=false,$get_empty=false)
+        {
+            self::log('> getData()',7);
+            $formname = self::current();
+            if(!isset(self::$FORMS[$formname]['__is_valid']))
+                self::isValid($get_empty);
+            if(!self::$FORMS[$formname]['__is_valid']&&!$always_return)
+                return NULL;
+            return self::$DATA[$formname];
+            self::log('< getData()',7);
+        }   // end function getData()
+
+        /**
+         * check if the current form has at least one button of the given type
+         *
+         * @access public
+         * @param  string  $type - button type; default: 'submit'
          * @return boolean
          **/
-        public function setForm($name='default')
+        public static function hasButton($type='submit')
         {
-            if(isset(self::$FORMS[$name]))
+            self::log('> hasButton()',7);
+            $name = self::current();
+            if(!count(self::$ELEMENTS[$name]))
+                $this->setForm($name);
+            $class = '\wblib\wbFormsElement'.ucfirst(strtolower($type));
+            if(count(self::$ELEMENTS[$name]))
             {
-                wbForms::$CURRENT = $name;
-                $this->attr['id'] = $name;
+                foreach(self::$ELEMENTS[$name] as $elem)
+                {
+                    if($elem instanceof $class)
+                    {
+                        self::log('> hasButton(true)',7);
+                        return true;
+                    }
+                }
             }
-        }   // end function setForm()
-        
+            self::log('> hasButton(false)',7);
+            return false;
+        }   // end function hasButton()
+
         /**
          *
          * @access public
          * @return
          **/
-        public function printHeaders()
+        public static function hasElement($name)
         {
-            echo wbFormsJQuery::getComponents(true);
-        }   // end function printHeaders()
-        
-        /**
-         *
-         * @access public
-         * @return
-         **/
-        public function printForm($name=NULL)
-        {
-            if(!$name)
-                $name = wbForms::$CURRENT;
-            self::log(sprintf('calling getForm(%s)',$name),7);
-            $this->getForm($name);
-        }   // end function printForm()
-        
-
-        /**
-         * render the form
-         *
-         * @access public
-         * @param  string  $form - form contents
-         * @return
-         **/
-        public static function render($form)
-        {
-            if ( self::$config['form_style'] != '' )
-                self::$config['style']
-                    = ( isset(self::$config['style']) && self::$config['style'] != '' )
-                    ? self::$config['style'] . self::$config['form_style']
-                    : self::$config['form_style']
-                    ;
-
-            if(!isset(self::$attributes['action']))
-                self::$attributes['action'] = $_SERVER['SCRIPT_NAME'];
-
-            $output = wbForms::$tpl;
-            foreach( wbFormsElement::$add_key as $key )
+            self::log('> hasElement()',7);
+            $formname = self::current();
+            self::log(sprintf('hasElement() - checking for element [%s] in form [%s]',$name,$formname),7);
+            if(isset(self::$ELEMENTS[$formname]) && count(self::$ELEMENTS[$formname]))
             {
-                $output = str_ireplace(
-                    '%'.$key.'%',
-                    ( isset(self::$config[$key]) ? $key.'="'.self::$config[$key].'" ' : '' ),
-                    $output
-                );
+                foreach(self::$ELEMENTS[$formname] as $index => $elem)
+                {
+                    if(!is_object($elem)) continue;
+                    self::log(sprintf('current element [%s]',$elem->attr['id']),7);
+                    if(
+                           ( isset($elem->attr['id'])   && $elem->attr['id']   == $name )
+                        || ( isset($elem->attr['name']) && $elem->attr['name'] == $name )
+                    ) {
+                        self::log(sprintf('found at index [%d]',$index),7);
+                        self::log('< hasElement() (inside if)',7);
+                        return $index;
+                    }
+                }
             }
-            $output =  str_ireplace(
-                array_map(
-                    function( $e ) { return "%$e%"; },
-                    array_keys(self::$attributes)
-                ),
-                array_merge(
-                    self::$attributes,
-                    self::$config,
-                    array(
-                        'content' => $form,
-                        'id'      => self::$CURRENT,
-                        'name'    => self::$CURRENT
-                    )
-                ),
-                $output
-            );
-            $output .= wbFormsJQuery::getComponents();
-            return $output;
-        }   // end function render()
+            self::log('not found',7);
+            self::log('< hasElement()',7);
+            return false;
+        }   // end function hasElement()
 
+        /**
+         * check if the form was submitted; checks for submit button by default
+         * (default name 'submit_<FORMNAME>')
+         *
+         * @access public
+         * @param  string  $check_field_name - optional field to check
+         * @return boolean
+         **/
+        public static function isSent($check_field_name=NULL)
+        {
+            self::log('> isSent()',7);
+            $formname = self::current();
+            if(!$check_field_name)
+                $check_field_name = 'submit_'.$formname;
+            self::log(sprintf('checking field [%s]',$check_field_name),7);
+
+            $form = wbFormsElementForm::get();
+            if( $form->attr['method'] == 'post' )
+                $ref =& $_POST;
+            else
+                $ref =& $_GET;
+
+            if(isset($ref) && isset($ref[$check_field_name]))
+            {
+                self::log('< isSent(true)',7);
+                return true;
+            }
+            self::log('< isSent(false)',7);
+            return false;
+        }   // end function isSent()
+
+        /**
+         *
+         * @access public
+         * @return
+         **/
+        public static function isValid($get_empty=false)
+        {
+            self::log('> isValid()',7);
+            $formname = self::current();
+            if(!isset(self::$FORMS[$formname]['__is_valid']))
+                self::validateForm($get_empty);
+            return self::$FORMS[$formname]['__is_valid'];
+        }   // end function isValid()
+
+        /**
+         * validates the form data
+         *
+         * @access public
+         * @param  boolean $get_empty - retrieve empty values too; default: false
+         * @return
+         **/
+        public static function validateForm($get_empty=false)
+        {
+            self::log('> validateForm()',7);
+            $formname = self::current();
+            // reset errors
+            self::$ERRORS = array();
+            // reset form data
+            self::$DATA[$formname] = array();
+
+            $form = wbFormsElementForm::get();
+            if( $form->attr['method'] == 'post' )
+                $ref =& $_POST;
+            else
+                $ref =& $_GET;
+
+            self::log('incoming form data:',7);
+            self::log(var_export($ref,1),7);
+
+            // validate token
+            if(wbFormsProtect::checkToken(self::$globals['token']))
+            {
+                // retrieve registered elements
+                $elements = self::$FORMS[$formname];
+                if(!count($elements))
+                {
+                    self::hint('The given form seems to have no elements!');
+                    self::log('< validateForm(false)',7);
+                    return false;
+                }
+                // check
+                foreach($elements as $elem)
+                {
+                    if(isset($elem['type']) && array_key_exists($elem['type'],self::$nodata) )
+                        continue;
+                    if(!isset($elem['name']))
+                    {
+                        if(isset($elem['id']))
+                        {
+                            $elem['name'] = $elem['id'];
+                        }
+                        else
+                        {
+                            self::log('missing element name!',1);
+                            continue;
+                        }
+                    }
+                    // check required
+                    if(isset($elem['required'])&&!isset($ref[$elem['name']]))
+                    {
+                        self::$ERRORS[$elem['name']]
+                            = isset($elem['missing'])
+                            ? self::t($elem['missing'])
+                            : self::t('Please insert a value for this field')
+                            ;
+                        self::log(sprintf('no data for required field [%s]',$elem['name']),7);
+                        continue;
+                    }
+                    // check allowed
+                    if(isset($elem['allow']) && isset($ref[$elem['name']]) && $ref[$elem['name']] !== '')
+                    {
+                        // scalar; example: 'number', 'string', 'int:5:15'
+                        if(is_scalar($elem['allow']))
+                        {
+                            if(substr_count($elem['allow'],':'))
+                                list($type,$opt) = explode(':',$elem['allow'],2);
+                            else
+                                $type = $elem['allow']; $opt = NULL;
+
+                            $method = 'check_'.$type;
+                            if(method_exists('\wblib\wbFormsProtect',$method))
+                            {
+                                if( ($value=wbFormsProtect::$method($ref[$elem['name']],$opt)) === false )
+                                {
+                                    self::$ERRORS[$elem['name']]
+                                        = isset($elem['invalid'])
+                                        ? self::t($elem['invalid'])
+                                        : self::t('You passed an invalid value')
+                                        ;
+                                    self::log(sprintf('invalid data for field [%s], allowed [%s]',$elem['name'],$elem['allow']),7);
+                                    continue;
+                                }
+                                else
+                                {
+                                    $ref[$elem['name']] = $value;
+                                }
+                            }
+                            elseif(is_callable('is_'.$type))
+                            {
+                                $method = 'is_'.$type;
+                                if(!$method($ref[$elem['name']]))
+                                {
+                                    self::$ERRORS[$elem['name']]
+                                        = isset($elem['invalid'])
+                                        ? self::t($elem['invalid'])
+                                        : self::t('You passed an invalid value')
+                                        ;
+                                    self::log(sprintf('invalid data for field [%s], allowed [%s]',$elem['name'],$elem['allow']),7);
+                                    continue;
+                                }
+                            }
+                            else
+                            {
+                                self::log(sprintf('Invalid check method [%s]!',$method),1);
+                                self::log(sprintf('Invalid check method [%s]!',$method),7);
+                                continue;
+                            }
+                        }
+                        // array of allowed values
+                        elseif(is_array($elem['allow']))
+                        {
+                            if(!wbFormsProtect::check_array($ref[$elem['name']],$elem['allow']))
+                            {
+                                self::$ERRORS[$elem['name']]
+                                    = isset($elem['invalid'])
+                                    ? self::t($elem['invalid'])
+                                    : self::t('You passed an invalid value')
+                                    ;
+                                self::log(sprintf('invalid data for field [%s], allowed [%s]',$elem['name'],implode(', ',$elem['allow'])),7);
+                                continue;
+                            }
+                        }
+                    }   // end check allowed
+
+                    // add to validated data
+                    if(isset($ref[$elem['name']]) || $get_empty )
+                    {
+                        self::log(sprintf(
+                            'storing data for field [%s], value [%s]',$elem['name'],
+                            (isset($ref[$elem['name']])?$ref[$elem['name']]:'')
+                        ),7);
+                        if(isset($ref[$elem['name']]) && $ref[$elem['name']] !== '')
+                            self::$DATA[$formname][$elem['name']] = $ref[$elem['name']];
+                        elseif($get_empty)
+                            self::$DATA[$formname][$elem['name']] = '';
+                    }
+                }
+                if(count(self::$ERRORS))
+                {
+                    self::log('< validateForm(false)',7);
+                    self::$FORMS[$formname]['__is_valid'] = false;
+                    return false;
+                }
+                self::log('< validateForm(true)',7);
+                self::$FORMS[$formname]['__is_valid'] = true;
+                return true;
+            }
+            self::log('< validateForm()',7);
+        }   // end function validateForm()
+        
         /**
          *
          * @access public
@@ -604,185 +1392,11 @@ if ( ! class_exists( 'wbForms', false ) )
          **/
         public static function dump()
         {
-            echo "<textarea cols=\"100\" rows=\"20\" style=\"width: 100%;\">";
-            print_r( var_export(self::$FORMS[self::$CURRENT]) );
-            echo "</textarea>";
+            $formname = self::current();
+            print_r(self::$FORMS[$formname]);
         }   // end function dump()
-        
-    }   // ----------  end class wbForms ----------
 
-    /**
-     * form builder jQuery interface class
-     *
-     * @category   wblib2
-     * @package    wbFormsJQuery
-     * @copyright  Copyright (c) 2013 BlackBird Webprogrammierung
-     * @license    GNU LESSER GENERAL PUBLIC LICENSE Version 3
-     */
-    if ( ! class_exists( 'wbFormsJQuery', false ) )
-    {
-        class wbFormsJQuery extends wbFormsBase
-        {
-            /**
-             * list of UI components to load
-             **/
-            public static $ui_components = array();
-
-            /**
-             * simple way to add a jQuery UI component; will not set any
-             * options
-             *
-             * @access public
-             * @param  string  $id   - HTML element id
-             * @param  string  $name - component name
-             * @return string
-             **/
-            public static function addComponent($id,$name,$options=NULL)
-            {
-                if ( ! isset(self::$ui_components[$id]) )
-                    self::$ui_components[$id] = array();
-                array_push(
-                    self::$ui_components[$id],
-                      'jQuery("#'.$id.'").'.$name.'('
-                    . ( $options ? '{ '.$options.' }' : '' )
-                    . ');'
-                );
-            }   // end function addComponent()
-
-            /**
-             * returns the necessary JS to load the configured components
-             *
-             * @access public
-             * @return mixed  - string or NULL if no components where found
-             **/
-            public static function getComponents($called_from_header=false)
-            {
-                $code   = NULL;
-                $output = NULL;
-
-                // always load the core if UI is required
-                if(count(self::$ui_components))
-                {
-                    self::$config['jquery']    = true;
-                    self::$config['jquery_ui'] = true;
-                }
-                if(self::$config['jquery'])
-                    $output = '<script type="text/javascript" src="'
-                            . self::$config['jquery_src']
-                            . '"></script>'
-                            . "\n";
-
-                if(self::$config['jquery_ui'])
-                {
-                    $output .= '<script type="text/javascript" src="'
-                            .  self::$config['jquery_ui_src']
-                            .  '"></script>'
-                            .  "\n";
-                    if ( $called_from_header )
-                        $output .= self::renderHeader();
-                    else
-                        $code   = "\n\t\t"
-                                .  '$("head").append(\'<link rel="stylesheet" href="'
-                                .  str_ireplace('%theme%',self::$config['jquery_ui_theme'],self::$config['jquery_ui_css'])
-                                .  '" type="text/css" />\');'
-                                ;
-                }
-                if(count(self::$config['css_files']))
-                    foreach(self::$config['css_files'] as $url)
-                        $code   .= "\n\t\t"
-                                .  '$("head").append(\'<link rel="stylesheet" href="'
-                                .  $url
-                                .  '" type="text/css" />\');'
-                                ;
-
-                self::$ui_components = wbArray::ArrayUniqueRecursive(self::$ui_components);
-
-                if(count(self::$ui_components))
-                    $code   .= "\n\t\t"
-                            . implode(
-                                  "\n\t\t",
-                                  array_map(
-                                      function ($e) { return $e[0]; },
-                                      array_values(self::$ui_components)
-                                  )
-                              );
-
-                // add tooltips
-                $code .= "
-                    jQuery('span.fbinfo').tooltip();
-                    jQuery('span.fbinfo').each( function() { if ( jQuery(this).attr('title').length ) { jQuery(this).show(); } });
-                    jQuery('input').unbind('click').click( function(e) {
-                        jQuery('span.fbinfosmall').remove();
-                        if(jQuery(this).next('span.fbinfo').attr('title').length) {
-                            jQuery(this).next('span.fbinfo').after(
-                                '<span class=\"fbinfosmall ui-widget ui-widget-content ui-corner-all\" style=\"font-size:0.7em;padding:5px;\">'+jQuery(this).next('span.fbinfo').attr('title')+'</span>'
-                            );
-                        }
-                    });
-                ";
-
-                if($output||$code)
-                    return $output . ( $code ? self::render($code) : '' );
-
-                return NULL;
-            }   // end function getComponents()
-            
-            /**
-             * render
-             *
-             * @access public
-             * @return string
-             **/
-            public static function render($code)
-            {
-                return
-                    '<script type="text/javascript">'."\n".
-                    'if ( typeof jQuery !== \'undefined\' ) {'."\n".
-                    '    jQuery(document).ready(function($) {'."\n".
-                             $code."\n".
-                    '    });'."\n".
-                    '}'."\n".
-                    '</script>'."\n"
-                    ;
-            }   // end function render()
-
-            /**
-             *
-             * @access private
-             * @return
-             **/
-            private static function renderHeader()
-            {
-
-                $output = '<link rel="stylesheet" href="'
-                        .  str_ireplace('%theme%',self::$config['jquery_ui_theme'],self::$config['jquery_ui_css'])
-                        .  '" type="text/css" media="screen" />'
-                        ;
-
-                if(count(self::$config['css_files']))
-                    foreach(self::$config['css_files'] as $url)
-                        $output .= "\n\t\t"
-                                .  '<link rel="stylesheet" href="'
-                                .  $url
-                                .  '" type="text/css" />'
-                                ;
-
-                if(count(self::$config['css']))
-                {
-                    $output .= '<style type="text/css" media="screen">'."\n";
-                    foreach(self::$config['css'] as $content)
-                        $output .= "\n\t\t"
-                                .  $content
-                                ;
-                    $output .= '</style>';
-                }
-
-                return $output;
-
-            }   // end function renderHeader()
-            
-        }
-    }   // ---------- end class wbFormsJQuery ----------
+    }   // ----------      end class wbForms      ----------
 
     /**
      * form builder element base class
@@ -792,627 +1406,1009 @@ if ( ! class_exists( 'wbForms', false ) )
      * @copyright  Copyright (c) 2013 BlackBird Webprogrammierung
      * @license    GNU LESSER GENERAL PUBLIC LICENSE Version 3
      */
-    if ( ! class_exists( 'wbFormsElement', false ) )
+    class wbFormsElement extends wbFormsBase
     {
-        class wbFormsElement extends wbFormsBase
+        /**
+         * output template
+         **/
+        protected static $tpl = NULL;
+         /**
+         * creates a new form element
+         *
+         * @access public
+         * @param  array  $options
+         * @return object
+         **/
+        protected function __construct($options=array())
         {
-            /**
-             * default attributes for every element
-             **/
-            protected $attributes = array(
-                // HTML attributes
-                'accesskey' => NULL,
-                'class'     => NULL,
-                'disabled'  => false,
-                'id'        => NULL,
-                'label'     => NULL,
-                'name'      => NULL,
-                'onblur'    => NULL,
-                'onchange'  => NULL,
-                'onclick'   => NULL,
-                'onfocus'   => NULL,
-                'onselect'  => NULL,
-                'readonly'  => false,
-                'required'  => false,
-                'style'     => NULL,
-                'tabindex'  => NULL,
-                'title'     => NULL,
-                'value'     => NULL,
-                // internal attributes
-                'allow'     => NULL,
-                'equal_to'  => NULL,
-                'infotext'  => NULL,
-                'invalid'   => NULL,
-                'missing'   => NULL,
-                'type'      => NULL,
-                'required_span' => NULL,
-            );
-            /**
-             *
-             **/
-            public static $add_key = array(
-                'value'   , 'tabindex', 'accesskey', 'class'   , 'style'   ,
-                'disabled', 'readonly', 'required' , 'checked' , 'selected',
-                'onblur'  , 'onchange', 'onclick'  , 'onfocus' , 'onselect',
-                'title'
-            );
-            /**
-             * default output template
-             * value is set in constructor to allow concatenation
-             **/
-            public static $tpl = NULL;
-            /**
-             *
-             **/
-            protected $attr = array(
-                'style' => 'margin:5px auto;'
-            );
+            $this->init();
+            $class = get_called_class();
+            if($class::$tpl == '')
+                $class::$tpl =
+                     // markup for <label>
+                     "%label%"
+                     // markup for required fields
+                   .  "%is_required%"
+                     // default attributes
+                   . "<input%type%%name%%id%%class%%style%%title%%value%%required%"
+                     // more attributes
+                   . "%tabindex%%accesskey%%disabled%%readonly%%onblur%%onchange%%onclick%%onfocus%%onselect% />"
+                   . "\n"
+                     // errors and other infos
+                   . "%notes%"
+                   ;
 
-            /**
-             * creates a new form element
-             *
-             * @access public
-             * @param  array  $options
-             * @return object
-             **/
-            public function __construct($options=array())
+            foreach($this->attributes as $key => $default)
             {
-                if(!self::$tpl)
-                    self::$tpl =
-                         // markup for required fields
-                         "%required_span%"
-                         // markup for <label>
-                       . "%label%"
-                         // default attributes
-                       . "<input type=\"%type%\" name=\"%name%\" id=\"%id%\" "
-                         // more attributes
-                       . "%value%%required%%title%%tabindex%%accesskey%%class%%style%%disabled%%readonly%%onblur%%onchange%%onclick%%onfocus%%onselect%/>"
-                         // tooltip; default is display:none, will be show()n using jQuery later on
-                       . "&nbsp;<span class=\"fbinfo ui-button ui-icon ui-icon-comment\" title=\"%infotext%\" style=\"display:none;\">&nbsp;&nbsp;&nbsp;</span>\n"
-                       ;
-                $this->init();
-                foreach($this->attributes as $key => $default)
-                {
-                    if(isset($options[$key]))
-                        $this->attr[$key] = $options[$key];
-                    else
-                        if($default)
-                            $this->attr[$key] = $default;
-                }
-            }   // end function __construct()
-
-            /**
-             * returns an instance (normally 'getInstance()')
-             *
-             * @access public
-             * @param  array  $options
-             * @return
-             **/
-            public static function get($options=array())
-            {
-                $class = get_called_class();
-                return new $class($options);
-            }   // end function get()
-
-            /**
-             * generates an unique element name if none is given
-             *
-             * @access protected
-             * @param  integer  $length
-             * @return string
-             **/
-            protected function generateName( $length = 5 ) {
-                for(
-                       $code_length = $length, $newcode = '';
-                       strlen($newcode) < $code_length;
-                       $newcode .= chr(!rand(0, 2) ? rand(48, 57) : (!rand(0, 1) ? rand(65, 90) : rand(97, 122)))
-                );
-                return 'fbformfield_'.$newcode;
-            }   // end function generateName()
-
-            /**
-             * function prototype, element classes may override this to add
-             * custom attributes
-             *
-             * @access public
-             * @return object (chainable)
-             **/
-            public function init()
-            {
-                return $this;
-            }   // end function init()
-
-            /**
-             * checks for required attributes like 'id' and 'name'
-             *
-             * @access public
-             * @return void
-             **/
-            public function checkAttr()
-            {
-                if(!isset($this->attr['type']))
-                    $this->attr['type'] = 'text';
-                if(!isset($this->attr['name']))
-                    $this->attr['name'] = wbFormsElement::generateName();
-                if(!isset($this->attr['id']))
-                    $this->attr['id'] = $this->attr['name'];
-                if(isset($this->attr['required']) && $this->attr['required'] === true)
-                {
-                    $this->attr['required_span'] = self::$config['required_span'];
-                    $this->attr['required']      = 'required'; // valid XHTML
-                    $this->attr['class'] =
-                        (
-                            isset($this->attr['class'])
-                          ? $this->attr['class'].' ui-state-highlight'
-                          : 'ui-state-highlight'
-                        );
-                }
+                if(isset($options[$key]))
+                    $this->attr[$key] = $options[$key];
                 else
-                {
-                    $this->attr['required_span'] = self::$config['blank_span'];
-                }
-                self::log('attributes: '.var_export($this->attr,1),7);
-            }   // end function checkAttr()
+                    if($default)
+                        $this->attr[$key] = $default;
+            }
 
-            /**
-             * default render method for most element types; for those who need
-             * different markup, this method must be overridden
-             *
-             * @access public
-             * @return string  - HTML
-             **/
-            public function render()
+            self::log(sprintf('element of type [%s] initialized with attr',get_class($this)),7);
+            self::log(var_export($this->attr,1),7);
+        }   // end function __construct()
+
+        /**
+         * function prototype, element classes may override this to add
+         * custom attributes
+         *
+         * @access public
+         * @return object (chainable)
+         **/
+        public function init() { return $this; }   // end function init()
+
+        /**
+         * returns an instance (normally called 'getInstance()')
+         *
+         * @access public
+         * @param  array  $options
+         * @return
+         **/
+        public static function get($options=array())
+        {
+            $class = '\\'.get_called_class();
+            self::log(sprintf('creating element of class [%s]',$class),7);
+            return new $class($options);
+        }   // end function get()
+
+        /**
+         * checks for required attributes like 'id' and 'name'
+         *
+         * @access public
+         * @return void
+         **/
+        public function checkAttr()
+        {
+            if(isset($this->attr['required']) && $this->attr['required'] !== false)
             {
-                return $this->replaceAttr();
-        	}   // end function render()
-
-            /**
-             * replaces the placeholders in the output template with the
-             * appropriate element options
-             *
-             * @access protected
-             * @return string
-             **/
-            protected function replaceAttr($tpl_var='tpl')
+                if(!isset($this->attr['is_group']) || !$this->attr['is_group'])
+                    $this->attr['is_required'] = self::$globals['required_span'];
+                $this->attr['required'] = 'required'; // valid XHTML
+            }
+            else
             {
-                $this->checkAttr();
+                if(!isset($this->attr['is_group']) || !$this->attr['is_group'])
+                    $this->attr['is_required'] = self::$globals['blank_span'];
+            }
+            self::log('attributes: '.var_export($this->attr,1),7);
+        }   // end function checkAttr()
 
-                if(isset($this->attr['label']) && !$this instanceof wbFormsElementLabel && !$this instanceof wbFormsElementButton)
-                {
-                    $label = new wbFormsElementLabel(
-                        array(
-                            'id'       => $this->attr['id'],
-                            'label'    => self::t($this->attr['label']),
-                            'is_radio' =>
-                                (
-                                    (
-                                           substr($this->attr['type'],0,5) == 'radio'
-                                        || substr($this->attr['type'],0,8) == 'checkbox'
-                                    )
-                                    ? true
-                                    : false
-                                ),
-                        )
-                    );
-                    $this->attr['label'] = $label->render();
-                }
+        /**
+         * default render method for most element types; for those who need
+         * different markup, this method must be overridden
+         *
+         * @access public
+         * @return string  - HTML
+         **/
+        public function render()
+        {
+            return $this->replaceAttr();
+    	}   // end function render()
 
-                $class  = get_called_class();
-                $output = $class::${$tpl_var};
-                foreach( self::$add_key as $key )
-                {
-                    $output = str_ireplace(
-                        '%'.$key.'%',
-                        ( isset($this->attr[$key]) ? $key.'="'.$this->attr[$key].'" ' : '' ),
-                        $output
-                    );
-                }
-                self::log('template after replacing keyed placeholders',7);
-                self::log($output,7);
+        /**
+         *
+         * @access public
+         * @return
+         **/
+        public function valueattr()
+        {
+            return 'value';
+        }   // end function valueattr()
 
-                $output = str_ireplace(
-                    array_map(
-                        function( $e ) { return "%$e%"; },
-                        array_keys($this->attributes)
-                    ),
-                    array_merge($this->attributes,$this->attr),
-                    $output
-                );
-                self::log('template after replacing normal placeholders',7);
-                self::log($output,7);
+    }   // ----------   end class wbFormsElement  ----------
 
-                // remove any placeholders not replaced yet
-                $output = preg_replace( '~%\w+%~', '', $output );
+    /**
+     * form builder form element class
+     *
+     * @category   wblib2
+     * @package    wbFormsElementForm
+     * @copyright  Copyright (c) 2013 BlackBird Webprogrammierung
+     * @license    GNU LESSER GENERAL PUBLIC LICENSE Version 3
+     */
+    class wbFormsElementForm extends wbFormsElement
+    {
+        private static   $instances  = array();
+        protected        $attributes = array(
+            // <form> attributes
+            'action'       => NULL,
+            'method'       => NULL,
+            'id'           => NULL,
+            'name'         => NULL,
+            'class'        => NULL,
+            'enctype'      => NULL,
+            // internal attributes
+            'content'      => NULL,
+            'form_class'   => NULL,
+            'form_width'   => NULL,
+            'fieldset'     => NULL,
+        );
+        public                $attr = array(
+            'action'       => NULL,
+            'method'       => 'post',
+            'id'           => NULL,
+            'name'         => NULL,
+            'class'        => 'ui-widget',
+            'enctype'      => 'application/x-www-form-urlencoded',
+            // internal attributes
+            'content'      => NULL,
+            'form_class'   => 'fbform',
+            'form_width'   => '800px',
+        );
+        /**
+         * output template
+         **/
+        protected static $tpl
+            = "<div class=\"%form_class%\" style=\"width:%form_width%\">\n<form action=\"%action%\" enctype=\"%enctype%\" method=\"%method%\" %name%%id%%class%%style%>\n%content%\n%fieldset%</form>\n</div>\n";
 
-                //
-                if ( $this->attr['type'] == 'checkbox' )
-                    wbFormsJQuery::addComponent($this->attr['id'],'button');
+        public function init()
+        {
+            $this->attr['id']   = wbForms::current();
+            $this->attr['name'] = wbForms::current();
+            return $this;
+        }   // end function init()
 
-                return $output
-                    . (
-                          (
-                                 wbForms::$config['breaks']
-                              && !$this instanceof wbFormsElementFieldset
-                              && !$this instanceof wbFormsElementLegend
-                              && !$this instanceof wbFormsElementLabel
-                              && !$this instanceof wbFormsElementButton
-                              && !$this instanceof wbFormsElementRadio
-                          )
-                        ? '<br />'
-                        : ''
-                      );
-            }   // end function replaceAttr()
-            
-        }   // ---------- end class wbFormsElement ----------
+        /**
+         * returns an instance (normally called 'getInstance()')
+         *
+         * @access public
+         * @param  array  $options
+         * @return
+         **/
+        public static function get($options=array())
+        {
+            $name = wbForms::current();
+            if(!isset(self::$instances[$name]))
+                self::$instances[$name] = new self($options);
+            return self::$instances[$name];
+        }   // end function get()
+
+        /**
+         * render the form
+         *
+         * @access public
+         * @param  string  $elements
+         * @return string
+         **/
+        public function render()
+        {
+            $elements = func_get_arg(0);
+            // render form
+            $this->attr['content']  = $elements;
+            // make sure to close last fieldset
+            $this->attr['fieldset'] = wbFormsElementFieldset::get()->close();
+            $output  = $this->replaceAttr();
+            // add jQuery elements
+            $output .= wbFormsJQuery::render();
+            return $output;
+        }   // end function render()
+
+    }   // ----------   end class wbFormsElementForm  ----------
 
 /*******************************************************************************
  * special field types
  ******************************************************************************/
 
+    /**
+     * form builder label element class
+     *
+     * @category   wblib2
+     * @package    wbFormsElementLabel
+     * @copyright  Copyright (c) 2013 BlackBird Webprogrammierung
+     * @license    GNU LESSER GENERAL PUBLIC LICENSE Version 3
+     */
+    class wbFormsElementInfo extends wbFormsElement
+    {
+        protected static $tpl
+            = '<div%class%%style%>%label%</div>';
         /**
-         * form builder fieldset element class
-         *
-         * @category   wblib2
-         * @package    wbFormsElementFieldset
-         * @copyright  Copyright (c) 2013 BlackBird Webprogrammierung
-         * @license    GNU LESSER GENERAL PUBLIC LICENSE Version 3
-         */
-        class wbFormsElementFieldset extends wbFormsElement
+         * adds select specific attributes
+         **/
+        public function init()
         {
-            private static $is_open
-                = false;
-            public  static $tpl
-                = '<fieldset %class%%style%>';
-            public $attr
-                = array(
-                      'class' => 'ui-widget ui-widget-content ui-corner-all ui-helper-clearfix',
-                      'style' => 'margin-bottom:15px;',
-                  );
-
-            /**
-             * open a <fieldset>; this also closes any fieldset that was opened
-             * before
-             *
-             * please note that fieldsets cannot be nested!
-             *
-             * @access public
-             * @return string
-             **/
-            public function open()
-            {
-                $close = self::close();
-                self::$is_open = true;
-                return $close.$this->replaceAttr();
-            }   // end function open()
-
-            /**
-             * closes a <fieldset>
-             *
-             * @access public
-             * @return string
-             **/
-            public function close()
-            {
-                if(self::$is_open)
-                {
-                    self::$is_open = false;
-                    return '</fieldset>';
-                }
-            }   // end function close()
-        }   // ---------- end class wbFormsElementFieldset ----------
-
-        /**
-         * form builder legend element class; auto-opens a fieldset
-         *
-         * @category   wblib2
-         * @package    wbFormsElementLegend
-         * @copyright  Copyright (c) 2013 BlackBird Webprogrammierung
-         * @license    GNU LESSER GENERAL PUBLIC LICENSE Version 3
-         */
-        class wbFormsElementLegend extends wbFormsElement
-        {
-            public static $tpl
-                = "<legend id=\"%id%\" %class%%style%>%label%</legend>\n";
-            public $attr = array(
-                'class' => 'ui-widget ui-widget-header ui-corner-all',
-                'style' => 'padding: 5px 10px;'
-            );
-            /**
-             *
-             * @access public
-             * @return
-             **/
-            public function render()
-            {
-                 return
-                       wbFormsElementFieldset::get()->open()
-                     . $this->replaceAttr();
-            }   // end function render()
-        }   // ---------- end class wbFormsElementLegend ----------
-
-        /**
-         * form builder label element class
-         *
-         * @category   wblib2
-         * @package    wbFormsElementLabel
-         * @copyright  Copyright (c) 2013 BlackBird Webprogrammierung
-         * @license    GNU LESSER GENERAL PUBLIC LICENSE Version 3
-         */
-        class wbFormsElementLabel extends wbFormsElement
-        {
-            public static $tpl
-                = '<label for="%id%" %class%%style%>%label%</label>';
-            public static $default_style
-                = 'display:inline-block;min-width:250px;margin-left:15px;';
-            public $attr = array(
-                'class'    => 'fblabel',
-                'style'    => NULL,
-                'is_radio' => false,
-            );
-            /**
-             * adds select specific attributes
-             **/
-            public function init()
-            {
-                $this->attributes['is_radio'] = NULL;
-                $this->attr['style'] = self::$default_style;
-                return $this;
-            }
-            public function render()
-            {
-                // remove style from radio fields
-                if($this->attr['is_radio'] && $this->attr['style'] == self::$default_style)
-                    unset( $this->attr['style'] );
-                return $this->replaceAttr();
-            }
-        }   // ---------- end class wbFormsElementLabel ----------
-
-        /**
-         * form builder textarea element class
-         *
-         * @category   wblib2
-         * @package    wbFormsElementTextarea
-         * @copyright  Copyright (c) 2013 BlackBird Webprogrammierung
-         * @license    GNU LESSER GENERAL PUBLIC LICENSE Version 3
-         */
-        class wbFormsElementTextarea extends wbFormsElement
-        {
-            public function init()
-            {
-                self::$tpl
-                    = '%required_span%%label%'
-                    . '<textarea name="%name%" id="%id%" '
-                    . '%tabindex%%accesskey%%class%%style%%disabled%%readonly%%onblur%%onchange%%onclick%%onfocus%%onselect%>'
-                    . '%value%'
-                    . '</textarea>'
-                    ;
-            }
-        }   // ---------- end class wbFormsElementTextarea ----------
-
-        /**
-         * form builder select element class
-         *
-         * @category   wblib2
-         * @package    wbFormsElementSelect
-         * @copyright  Copyright (c) 2013 BlackBird Webprogrammierung
-         * @license    GNU LESSER GENERAL PUBLIC LICENSE Version 3
-         */
-        class wbFormsElementSelect extends wbFormsElement
-        {
-            /**
-             * adds select specific attributes
-             **/
-            public function init()
-            {
-                $this->attributes['options']  = NULL;
-                $this->attributes['selected'] = NULL;
-                $this->attributes['multiple'] = NULL;
-                self::$tpl
-                    = '%required_span%%label%'
-                    . '<select name="%name%" id="%id%" '
-                    . '%multiple%%tabindex%%accesskey%%class%%style%%disabled%%readonly%%onblur%%onchange%%onclick%%onfocus%%onselect%>'
-                    . '%options%'
-                    . '</select>'
-                    // tooltip; default is display:none, will be show()n using jQuery later on
-                    . "&nbsp;<span class=\"fbinfo ui-button ui-icon ui-icon-comment\" title=\"%infotext%\" style=\"display:none;float:right;margin-right:235px;\">&nbsp;&nbsp;&nbsp;</span>\n"
-                    ;
-                return $this;
-            }
-            public function render()
-            {
-                $options   = array();
-                $isIndexed = array_values($this->attr['options']) === $this->attr['options'];
-                $sel       = array();
-                if(isset($this->attr['selected']))
-                    $sel[$this->attr['selected']] = 'selected="selected"';
-                if(isset($this->attr['multiple']))
-                    $this->attr['multiple'] = 'multiple="multiple"';
-                if($isIndexed)
-                    foreach($this->attr['options'] as $item)
-                        $options[] = '<option value="'.$item.'" '.( isset($sel[$item]) ? $sel[$item] : '' ).'>'.$item.'</option>'."\n";
-                else
-                    foreach($this->attr['options'] as $value => $item)
-                        $options[] = '<option value="'.$value.'" '.( isset($sel[$value]) ? $sel[$value] : '' ).'>'.$item.'</option>'."\n";
-                $this->attr['options'] = implode('',$options);
-                return $this->replaceAttr();
-            }   // end function render()
-        }   // ---------- end class wbFormsElementSelect ----------
-
-        /**
-         * form builder checkbox element class
-         *
-         * @category   wblib2
-         * @package    wbFormsElementCheckbox
-         * @copyright  Copyright (c) 2013 BlackBird Webprogrammierung
-         * @license    GNU LESSER GENERAL PUBLIC LICENSE Version 3
-         */
-        class wbFormsElementCheckbox extends wbFormsElement
-        {
-            public static $tpl
-                = "%required_span%<span style=\"%label_style%\">%checkbox_label%</span><input type=\"%type%\" name=\"%name%\" id=\"%id%\" %value%%checked%%required%%tabindex%%accesskey%%class%%style%%disabled%%readonly%%onblur%%onchange%%onclick%%onfocus%%onselect%/> %label%\n";
-            public function init()
-            {
-                $this->attributes['checked']        = NULL;
-                $this->attributes['label_style']    = wbFormsElementLabel::$default_style;
-                $this->attributes['checkbox_label'] = NULL;
-                return $this;
-            }
-            public function render()
-            {
-                $this->attr['checkbox_label'] = $this->attr['label'];
-                $this->checkAttr();
-                return $this->replaceAttr();
-            }
-
-        }   // ---------- end class wbFormsElementCheckbox ----------
-
-        /**
-         * form builder radio element class
-         *
-         * @category   wblib2
-         * @package    wbFormsElementRadio
-         * @copyright  Copyright (c) 2013 BlackBird Webprogrammierung
-         * @license    GNU LESSER GENERAL PUBLIC LICENSE Version 3
-         */
-        class wbFormsElementRadio extends wbFormsElement
-        {
-            public static $tpl
-                = "<input type=\"%type%\" name=\"%name%\" id=\"%id%\" %value%%checked%%required%%tabindex%%accesskey%%class%%style%%disabled%%readonly%%onblur%%onchange%%onclick%%onfocus%%onselect%/> %label%\n";
-            public function init()
-            {
-                $this->attributes['checked'] = NULL;
-                return $this;
-            }
-        }   // ---------- end class wbFormsElementRadio ----------
-
-        /**
-         * form builder radio group class
-         *
-         * groups a list of radio elements
-         *
-         * @category   wblib2
-         * @package    wbFormsElementRadioGroup
-         * @copyright  Copyright (c) 2013 BlackBird Webprogrammierung
-         * @license    GNU LESSER GENERAL PUBLIC LICENSE Version 3
-         */
-        class wbFormsElementRadiogroup extends wbFormsElement
-        {
-            public    static $tpl
-                = '<div class="radiogroup" id="%id%">%required_span%<span style="%label_style%">%label%</span>%options%</div>';
-            protected static $number = 0;
-            public function init()
-            {
-                $this->attributes['type']        = 'radio';
-                $this->attributes['checked']     = 'checked';
-                $this->attributes['options']     = array();
-                $this->attributes['label_style'] = wbFormsElementLabel::$default_style;
-                return $this;
-            }
-            public function render()
-            {
-                $this->checkAttr();
-                self::$number++;
-                $options   = array();
-                $isIndexed = array_values($this->attr['options']) === $this->attr['options'];
-                foreach( $this->attr['options'] as $key => $value )
-                {
-                    $options[] = wbFormsElementRadio::get(
-                        array(
-                            'type'    => str_replace('group', '', $this->attr['type'] ),
-                            'name'    => $this->attr['name'],
-                            'id'      => $this->attr['name'].'_'.$value,
-                            'label'   => ( $isIndexed ? $value : $key ),
-                            'value'   => $value,
-                            'checked' => ( isset($this->attr['checked']) && $this->attr['checked'] == $value )
-                                      ?  'checked'
-                                      :  NULL,
-                        ))->render();
-                }
-                $this->attr['options'] = implode( "\n", $options );
-                $this->attr['id']      = $this->attr['type'].'_'.self::$number;
-                wbFormsJQuery::addComponent($this->attr['id'],'buttonset');
-                return $this->replaceAttr();
-            }
-        }   // ---------- end class wbFormsElementRadio ----------
-
-        /**
-         * form builder radio group class
-         *
-         * groups a list of radio elements
-         *
-         * @category   wblib2
-         * @package    wbFormsElementRadioGroup
-         * @copyright  Copyright (c) 2013 BlackBird Webprogrammierung
-         * @license    GNU LESSER GENERAL PUBLIC LICENSE Version 3
-         */
-        class wbFormsElementCheckboxgroup extends wbFormsElementRadiogroup
-        {
-            public function init()
-            {
-                parent::init();
-                $this->attributes['type'] = 'checkbox';
-                return $this;
-            }
+            $this->attributes['label'] = NULL;
+            $this->attr['class'] = 'ui-widget ui-widget-content ui-corner-all ui-helper-clearfix';
+            return $this;
         }
+    }   // ---------- end class wbFormsElementLabel ----------
+
+    /**
+     * form builder fieldset element class
+     *
+     * @category   wblib2
+     * @package    wbFormsElementFieldset
+     * @copyright  Copyright (c) 2013 BlackBird Webprogrammierung
+     * @license    GNU LESSER GENERAL PUBLIC LICENSE Version 3
+     */
+    class wbFormsElementFieldset extends wbFormsElement
+    {
+        private   static $is_open = false;
+        protected static $tpl     = '<fieldset%class%%style%>';
+        public function init()
+        {
+            $this->attr['class'] = 'ui-widget ui-widget-content ui-corner-all ui-helper-clearfix';
+            $this->attr['style'] = 'margin-bottom:15px;';
+            return $this;
+        }   // end function init()
+
 
         /**
-         * form builder date element class; uses jQuery DatePicker
+         * open a <fieldset>; this also closes any fieldset that was opened
+         * before
          *
-         * @category   wblib2
-         * @package    wbFormsElementDate
-         * @copyright  Copyright (c) 2013 BlackBird Webprogrammierung
-         * @license    GNU LESSER GENERAL PUBLIC LICENSE Version 3
-         */
-        class wbFormsElementDate extends wbFormsElement
+         * please note that fieldsets cannot be nested!
+         *
+         * @access public
+         * @return string
+         **/
+        public function open()
         {
-            public function render()
+            $close = self::close();
+            self::$is_open = true;
+            return $close.$this->replaceAttr()."\n";
+        }   // end function open()
+
+        /**
+         * closes a <fieldset>
+         *
+         * @access public
+         * @return string
+         **/
+        public function close()
+        {
+            if(self::$is_open)
             {
-                $this->checkAttr();
-                wbFormsJQuery::addComponent($this->attr['id'],'datepicker');
-                $this->attr['type'] = 'text';
-                return $this->replaceAttr();
-            }   // end function render()
-        }   // ---------- end class wbFormsElemetDate ----------
+                self::$is_open = false;
+                return '</fieldset>';
+            }
+        }   // end function close()
+    }   // ---------- end class wbFormsElementFieldset ----------
 
-        /**
-         * form builder button element; used for submit, reset
-         *
-         * @category   wblib2
-         * @package    wbFormsElementButton
-         * @copyright  Copyright (c) 2013 BlackBird Webprogrammierung
-         * @license    GNU LESSER GENERAL PUBLIC LICENSE Version 3
-         */
-        class wbFormsElementButton extends wbFormsElement
+    /**
+     * form builder legend element class; auto-opens a fieldset
+     *
+     * @category   wblib2
+     * @package    wbFormsElementLegend
+     * @copyright  Copyright (c) 2013 BlackBird Webprogrammierung
+     * @license    GNU LESSER GENERAL PUBLIC LICENSE Version 3
+     */
+    class wbFormsElementLegend extends wbFormsElement
+    {
+        protected static $tpl
+            = "<legend%id%%class%%style%>%label%</legend>\n";
+        public function init()
         {
-            public $attr = array(
-                'class' => 'ui-button ui-widget ui-state-default ui-corner-all ui-button-text-icon-primary'
-            );
-            public static $tpl = '<button name="%name%" id="%id%" %tabindex%%accesskey%%class%%style%%disabled%%readonly%%onblur%%onchange%%onclick%%onfocus%%onselect%>%label%</button>';
-        }   // ---------- end class wbFormsElementButton ----------
+            $this->attr['class'] = 'ui-widget ui-widget-header ui-corner-all';
+            $this->attr['style'] = 'padding: 5px 10px;';
+            return $this;
+        }
+        /**
+         *
+         * @access public
+         * @return
+         **/
+        public function render()
+        {
+             return
+                   wbFormsElementFieldset::get()->open()
+                 . $this->replaceAttr();
+        }   // end function render()
+    }   // ---------- end class wbFormsElementLegend ----------
 
+    /**
+     * form builder label element class
+     *
+     * @category   wblib2
+     * @package    wbFormsElementLabel
+     * @copyright  Copyright (c) 2013 BlackBird Webprogrammierung
+     * @license    GNU LESSER GENERAL PUBLIC LICENSE Version 3
+     */
+    class wbFormsElementLabel extends wbFormsElement
+    {
+        protected static $tpl
+            = '<label%for%%class%%style%>%label%</label>';
+        /**
+         * adds select specific attributes
+         **/
+        public function init()
+        {
+            $this->attributes['is_radio'] = NULL;
+            $this->attributes['for']      = NULL;
+            $this->attributes['label']    = NULL;
+            unset($this->attributes['type']);
+            return $this;
+        }
+        public function render()
+        {
+            $this->checkAttr();
+            if(!isset($this->attr['for']))
+                $this->attr['for'] = $this->attr['id'];
+            // remove style from radio fields
+            if(isset($this->attr['style']))
+                if($this->attr['is_radio'] && $this->attr['style'] == '' )
+                    unset( $this->attr['style'] );
+            // remove class from radio fields
+            if(isset($this->attr['class']))
+                if($this->attr['is_radio'] && $this->attr['class'] == 'fblabel')
+                    unset( $this->attr['class'] );
+            return $this->replaceAttr();
+        }   // end function render()
+
+    }   // ---------- end class wbFormsElementLabel ----------
+
+    /**
+     * form builder select element class
+     *
+     * @category   wblib2
+     * @package    wbFormsElementSelect
+     * @copyright  Copyright (c) 2013 BlackBird Webprogrammierung
+     * @license    GNU LESSER GENERAL PUBLIC LICENSE Version 3
+     */
+    class wbFormsElementSelect extends wbFormsElement
+    {
+        protected static $tpl = NULL;
+        /**
+         * adds select specific attributes
+         **/
+        public function init()
+        {
+            $this->attributes['options']  = NULL;
+            $this->attributes['selected'] = NULL;
+            $this->attributes['multiple'] = NULL;
+            wbFormsElementSelect::$tpl
+                = '%label%%is_required%'
+                . "\n"
+                . '<select%name%%id%%class%%style%%multiple%'
+                . '%tabindex%%accesskey%%disabled%%readonly%%required%%onblur%%onchange%%onclick%%onfocus%%onselect%>'
+                . "\n"
+                . '%options%'
+                . '</select>'
+                . "\n"
+                ;
+            return $this;
+        }
+        public function render()
+        {
+            $this->checkAttr();
+            $options   = array();
+            $isIndexed = array_values($this->attr['options']) === $this->attr['options'];
+            $sel       = array();
+            if(isset($this->attr['selected']))
+                $sel[$this->attr['selected']] = 'selected="selected"';
+            if(isset($this->attr['multiple']))
+                $this->attr['multiple'] = 'multiple="multiple"';
+            if($isIndexed)
+                foreach($this->attr['options'] as $item)
+                    $options[] = '<option value="'.$item.'" '.( isset($sel[$item]) ? $sel[$item] : '' ).'>'.$item.'</option>'."\n";
+            else
+                foreach($this->attr['options'] as $value => $item)
+                    $options[] = '<option value="'.$value.'" '.( isset($sel[$value]) ? $sel[$value] : '' ).'>'.$item.'</option>'."\n";
+            $this->attr['options'] = implode('',$options);
+            //wbFormsJQuery::attach($this->attr['id'],'select2',"width:'250px'");
+            return $this->replaceAttr();
+        }   // end function render()
+        /**
+         *
+         * @access public
+         * @return
+         **/
+        public function valueattr()
+        {
+            return 'selected';
+        }   // end function valueattr()
+    }   // ---------- end class wbFormsElementSelect ----------
+
+    /**
+     * form builder select element class
+     *
+     * @category   wblib2
+     * @package    wbFormsElementSelect
+     * @copyright  Copyright (c) 2013 BlackBird Webprogrammierung
+     * @license    GNU LESSER GENERAL PUBLIC LICENSE Version 3
+     */
+    class wbFormsElementImageselect extends wbFormsElementSelect
+    {
+        /**
+         *
+         * @access public
+         * @return
+         **/
+        public function render()
+        {
+            $this->checkAttr();
+//            wbFormsJQuery::attach($this->attr['id'],'imagepicker');
+            return parent::render();
+        }   // end function init()
+        
     }
 
-
-
-    if ( ! class_exists( 'wblib\wbArray', false ) )
+    /**
+     * form builder textarea element class
+     *
+     * @category   wblib2
+     * @package    wbFormsElementTextarea
+     * @copyright  Copyright (c) 2013 BlackBird Webprogrammierung
+     * @license    GNU LESSER GENERAL PUBLIC LICENSE Version 3
+     */
+    class wbFormsElementTextarea extends wbFormsElement
     {
-        class wbArray
+        protected static $tpl = NULL;
+        public function init()
         {
-          	/**
-             *
-             *
-             *
-             *
-             **/
-            public static function ArrayUniqueRecursive( $array, $case_sensitive = false ) {
+            wbFormsElementTextarea::$tpl
+                = '%label%%is_required%'
+                . '<textarea %name%%id%%class%%style%'
+                . '%tabindex%%accesskey%%disabled%%readonly%%required%%onblur%%onchange%%onclick%%onfocus%%onselect%>'
+                . '%value%'
+                . '</textarea>'
+                ;
+            $this->simple_attr['value'] = 1;
+        }
+    }   // ---------- end class wbFormsElementTextarea ----------
+
+    /**
+     * form builder radio element class
+     *
+     * @category   wblib2
+     * @package    wbFormsElementRadio
+     * @copyright  Copyright (c) 2013 BlackBird Webprogrammierung
+     * @license    GNU LESSER GENERAL PUBLIC LICENSE Version 3
+     */
+    class wbFormsElementRadio extends wbFormsElement
+    {
+        protected static $tpl = NULL;
+        public function init()
+        {
+            wbFormsElementRadio::$tpl =
+                     // markup for required fields
+                     "%is_required%"
+                     // default attributes
+                   . "<input%type%%name%%id%%class%%style%%title%%value%%required%%checked%"
+                     // more attributes
+                   . "%tabindex%%accesskey%%disabled%%readonly%%onblur%%onchange%%onclick%%onfocus%%onselect% />"
+                     // markup for <label>
+                   . "%label%"
+                   ;
+            $this->attributes['checked']  = NULL;
+            $this->attributes['is_group'] = false;
+            return $this;
+        }
+        /**
+         *
+         * @access public
+         * @return
+         **/
+        public function valueattr()
+        {
+            return 'checked';
+        }   // end function valueattr()
+    }   // ---------- end class wbFormsElementRadio ----------
+
+    /**
+     * form builder checkbox element class
+     *
+     * @category   wblib2
+     * @package    wbFormsElementCheckbox
+     * @copyright  Copyright (c) 2013 BlackBird Webprogrammierung
+     * @license    GNU LESSER GENERAL PUBLIC LICENSE Version 3
+     */
+    class wbFormsElementCheckbox extends wbFormsElement
+    {
+        protected static $tpl = NULL;
+        public function init()
+        {
+            wbFormsElementCheckbox::$tpl =
+                 // label
+                 "<span %class%>%label_span%</span>"
+                 // markup for required fields
+               . "%is_required%"
+                 // default attributes
+               . "<input%type%%name%%id%%class%%style%%title%%value%%required%%checked%"
+                 // more attributes
+               . "%tabindex%%accesskey%%disabled%%readonly%%onblur%%onchange%%onclick%%onfocus%%onselect% />"
+                 // markup for <label>
+               . "%label%"
+               ;
+            $this->attributes['label_span']  = NULL;
+            $this->attributes['class']       = 'fblabel';
+            $this->attr['is_group']          = false;
+        }
+        public function render()
+        {
+            $this->checkAttr();
+            wbFormsJQuery::attach($this->attr['id'],'button');
+            $this->attr['label_span'] = self::t($this->attr['label']);
+            return $this->replaceAttr();
+        }
+        /**
+         *
+         * @access public
+         * @return
+         **/
+        public function valueattr()
+        {
+            return 'checked';
+        }   // end function valueattr()
+
+
+    }   // ---------- end class wbFormsElementCheckbox ----------
+
+    /**
+     * form builder button element; used for submit, reset
+     *
+     * @category   wblib2
+     * @package    wbFormsElementButton
+     * @copyright  Copyright (c) 2013 BlackBird Webprogrammierung
+     * @license    GNU LESSER GENERAL PUBLIC LICENSE Version 3
+     */
+    class wbFormsElementButton extends wbFormsElement
+    {
+        public $attr = array(
+            'class' => 'ui-button ui-widget ui-state-default ui-corner-all ui-button-text-icon-primary',
+            'value' => 1,
+        );
+        public static $tpl = '<button%name%%id%%value%%tabindex%%accesskey%%class%%style%%disabled%%readonly%%onblur%%onchange%%onclick%%onfocus%%onselect%>%label%</button>';
+    }   // ---------- end class wbFormsElementButton ----------
+
+    /**
+     * form builder button element; used for submit, reset
+     *
+     * @category   wblib2
+     * @package    wbFormsElementButton
+     * @copyright  Copyright (c) 2013 BlackBird Webprogrammierung
+     * @license    GNU LESSER GENERAL PUBLIC LICENSE Version 3
+     */
+    class wbFormsElementReset extends wbFormsElementButton
+    {
+        public function init() {
+            $this->attr['onclick'] = "$('#".wbForms::current()."').trigger('reset')";
+            $this->attr['id']      = 'reset_'.wbForms::current();
+            wbFormsJQuery::attach($this->attr['id'], 'button', 'icons: { primary: "ui-icon-closethick" }');
+        }
+    }   // ---------- end class wbFormsElementReset ----------
+
+    /**
+     * form builder button element; used for submit, reset
+     *
+     * @category   wblib2
+     * @package    wbFormsElementButton
+     * @copyright  Copyright (c) 2013 BlackBird Webprogrammierung
+     * @license    GNU LESSER GENERAL PUBLIC LICENSE Version 3
+     */
+    class wbFormsElementSubmit extends wbFormsElementButton
+    {
+        public function init() {
+            $this->attr['onclick'] = "$('#".wbForms::current()."').submit()";
+            $this->attr['id']      = 'submit_'.wbForms::current().'_btn';
+            wbFormsJQuery::addComponent('button');
+            wbFormsJQuery::attach($this->attr['id'], 'button', 'icons: { primary: "ui-icon-circle-check" }');
+        }
+    }   // ---------- end class wbFormsElementSubmit ----------
+
+    /**
+     * form builder radio group class
+     *
+     * groups a list of radio elements
+     *
+     * @category   wblib2
+     * @package    wbFormsElementRadioGroup
+     * @copyright  Copyright (c) 2013 BlackBird Webprogrammierung
+     * @license    GNU LESSER GENERAL PUBLIC LICENSE Version 3
+     */
+    class wbFormsElementRadiogroup extends wbFormsElement
+    {
+        protected static $number = 0;
+        protected static $tpl    = NULL;
+        public function init()
+        {
+            $this->attributes['type']        = 'radio';
+            $this->attributes['checked']     = 'checked';
+            $this->attributes['class']       = 'fblabel';
+            $this->attributes['options']     = array();
+            $this->attributes['label_span']  = NULL;
+            wbFormsElementRadiogroup::$tpl
+                = '<div class="radiogroup" %title%%id%>'
+                . "\n"
+                . '<span %class%>%label_span%</span>%is_required%%options%'
+                . "\n"
+                . '</div>'
+                . "\n"
+                ;
+            wbFormsJQuery::addComponent('buttonset');
+            return $this;
+        }
+        public function render()
+        {
+            $this->checkAttr();
+            self::$number++;
+            $options   = array();
+            $isIndexed = array_values($this->attr['options']) === $this->attr['options'];
+            foreach( $this->attr['options'] as $value => $key )
+            {
+                $options[] = wbFormsElementRadio::get(
+                    array(
+                        'is_group' => true,
+                        'type'     => str_replace('group', '', $this->attr['type'] ),
+                        'name'     => $this->attr['name'],
+                        'id'       => $this->attr['name'].'_'.$value,
+                        'label'    => ( $isIndexed ? $value : $key ),
+                        'value'    => $value,
+                        'checked'  => ( isset($this->attr['checked']) && $this->attr['checked'] == $value )
+                                   ?  'checked'
+                                   :  NULL,
+                    ))->render();
+            }
+            self::log('Radiogroup elements:',7);
+            self::log(var_export($options,1),7);
+            $this->attr['options']    = implode( "\n", $options );
+            $this->attr['id']         = $this->attr['type'].'_'.self::$number;
+            $this->attr['label_span'] = self::t($this->attr['label']);
+            unset($this->attr['label']);
+            wbFormsJQuery::attach($this->attr['id'],'buttonset');
+            return $this->replaceAttr();
+        }
+    }   // ---------- end class wbFormsElementRadiogroup ----------
+
+
+    /**
+     * form builder checkbox group class
+     *
+     * groups a list of checkbox elements
+     *
+     * @category   wblib2
+     * @package    wbFormsElementCheckboxgroup
+     * @copyright  Copyright (c) 2013 BlackBird Webprogrammierung
+     * @license    GNU LESSER GENERAL PUBLIC LICENSE Version 3
+     */
+    class wbFormsElementCheckboxgroup extends wbFormsElementRadiogroup
+    {
+        //protected static $tpl = NULL;
+        public function init()
+        {
+            parent::init();
+            $this->attributes['type'] = 'checkbox';
+            return $this;
+        }
+    }   // ---------- end class wbFormsElementCheckboxgroup ----------
+
+    /**
+     * form builder date element class; uses jQuery DatePicker
+     *
+     * @category   wblib2
+     * @package    wbFormsElementDate
+     * @copyright  Copyright (c) 2013 BlackBird Webprogrammierung
+     * @license    GNU LESSER GENERAL PUBLIC LICENSE Version 3
+     */
+    class wbFormsElementDate extends wbFormsElement
+    {
+        public function render()
+        {
+            $this->checkAttr();
+            wbFormsJQuery::attach($this->attr['id'],'datepicker');
+            $this->attr['type'] = 'text';
+            return $this->replaceAttr();
+        }   // end function render()
+    }   // ---------- end class wbFormsElementDate ----------
+
+    /**
+     * form builder WYSIWYG element class; uses Aloha Editor
+     *
+     * @category   wblib2
+     * @package    wbFormsElementWysiwyg
+     * @copyright  Copyright (c) 2013 BlackBird Webprogrammierung
+     * @license    GNU LESSER GENERAL PUBLIC LICENSE Version 3
+     */
+    class wbFormsElementWysiwyg extends wbFormsElementTextarea
+    {
+        public function init()
+        {
+            // ----- enable this for using Aloha (3 lines) -----
+            //wbForms::addJSLink('http://cdn.aloha-editor.org/latest/lib/require.js');
+            //wbForms::addJSLink('http://cdn.aloha-editor.org/latest/lib/aloha.js','data-aloha-plugins="common/ui,common/format,common/list,common/link,common/highlighteditables"');
+            //wbForms::addCSSLink('http://cdn.aloha-editor.org/latest/css/aloha.css');
+            // ----- enable this for using TinyMCE (1 line) ----
+            wbForms::addJSLink('//tinymce.cachefly.net/4.0/tinymce.min.js');
+            $this->attr['style'] = 'width:300px;height:300px;';
+        }
+        public function render()
+        {
+            $this->checkAttr();
+            // ----- enable this for using Aloha (1 line) -----
+            //wbForms::addJS("Aloha.ready(function() { var $ = Aloha.jQuery; $('#".$this->attr['id']."').aloha(); });");
+            // ----- enable this for using TinyMCE (1 line) ----
+            wbForms::addJS("tinymce.init({selector:'textarea#".$this->attr['id']."'});");
+            return $this->replaceAttr();
+        }   // end function render()
+    }   // ---------- end class wbFormsElementWysiwyg ----------
+
+    /**
+     * form builder jQuery interface class
+     *
+     * @category   wblib2
+     * @package    wbFormsJQuery
+     * @copyright  Copyright (c) 2013 BlackBird Webprogrammierung
+     * @license    GNU LESSER GENERAL PUBLIC LICENSE Version 3
+     */
+    class wbFormsJQuery extends wbFormsBase
+    {
+        protected static $tpl           = NULL;
+        /**
+         * template to load scripts into the header
+         **/
+        private   static $script_tpl    = NULL;
+        /**
+         * template to load scripts via JS
+         **/
+        private   static $script_js_tpl     = NULL;
+        /**
+         *
+         **/
+        private   static $inline_script_tpl = NULL;
+        /**
+         * template to load CSS into header
+         **/
+        private   static $css_tpl           = NULL;
+        /**
+         *
+         **/
+        private   static $inline_css_tpl    = NULL;
+        /**
+         * template to load CSS via JS
+         **/
+        private   static $css_js_tpl        = NULL;
+        /**
+         * template for component loading
+         **/
+        private   static $comp_tpl          = NULL;
+        /**
+         * list of UI components to load
+         **/
+        private   static $ui_components     = array();
+        /**
+         * attach components to fields
+         **/
+        private   static $attach_comp       = array();
+        /**
+         *
+         **/
+        private   static $scripts           = array();
+        /**
+         * globals for jQuery config
+         **/
+        protected static $globals           = array(
+            'core_cdn' => 'https://ajax.googleapis.com/ajax/libs/jquery/2.0.3/jquery.min.js',
+            'ui_cdn'   => 'https://ajax.googleapis.com/ajax/libs/jqueryui/1/jquery-ui.min.js',
+            'ui_css'   => 'https://ajax.googleapis.com/ajax/libs/jqueryui/1.10.3/themes/%s/jquery-ui.min.css',
+            'ui_theme' => 'sunny',
+            'sel_css'  => 'http://cdn.jsdelivr.net/select2/3.4.2/select2.css',
+            'sel_cdn'  => 'http://cdn.jsdelivr.net/select2/3.4.2/select2.min.js',
+        );
+
+        public static function init()
+        {
+            wbFormsJQuery::$tpl
+                = '<script type="text/javascript">%s</script>';
+            wbFormsJQuery::$css_tpl
+                = '<link rel="stylesheet" href="%s" type="text/css" media="screen" />';
+            wbFormsJQuery::$inline_css_tpl
+                = '<style type="text/css" media="screen">%s</style>';
+            wbFormsJQuery::$css_js_tpl
+                = '$("head").append(\'<link rel="stylesheet" href="%s" type="text/css" />\');';
+            wbFormsJQuery::$script_tpl
+                = '<script type="text/javascript" src="%s" %s></script>';
+            wbFormsJQuery::$inline_script_tpl
+                = '<script type="text/javascript">%s</script>';
+            wbFormsJQuery::$comp_tpl
+                = '$("#%s").%s({%s});';
+            wbFormsJQuery::$scripts
+                = array(
+                      'jQuery'  => self::$globals['core_cdn'],
+                      'UI'      => self::$globals['ui_cdn'],
+                      'select2' => self::$globals['sel_cdn']
+                  );
+            wbForms::addCSSLink(self::$globals['sel_css']);
+        }   // end function init()
+
+        /**
+         * attach an UI component to a form field
+         *
+         * @access public
+         * @param  string  $name    - component name
+         * @return void
+         **/
+        public static function addComponent($name)
+        {
+            if ( ! isset(self::$ui_components[$name]) )
+            {
+                self::log(sprintf('adding UI component [%s]',$name),7);
+                array_push(
+                    self::$ui_components,
+                    $name
+                );
+            }
+        }   // end function addComponent()
+
+        /**
+         * attach an UI component to a field
+         *
+         * @access public
+         * @param  string  $id   - element id
+         * @param  string  $comp - component name
+         * @param  string  $opt  - options to be passed to the element
+         * @return
+         **/
+        public static function attach($id,$comp,$opt=NULL)
+        {
+            if(!isset(self::$attach_comp[$id]))
+                self::$attach_comp[$id] = array();
+            array_push(
+                self::$attach_comp[$id],
+                array( $comp => $opt )
+            );
+        }   // end function attach()
+        
+        /**
+         *
+         * @access public
+         * @return
+         **/
+        public static function getHeaders()
+        {
+            $seen_src = array();
+            // jQuery UI
+            $output
+                = sprintf(
+                      wbFormsJQuery::$css_tpl,
+                      sprintf(self::$globals['ui_css'],self::$globals['ui_theme'])
+                  );
+            // linked CSS
+            if(count(wbForms::$CSS))
+                $output  .= implode("\n",array_map(
+                    function($url) {
+                        return sprintf(
+                            wbFormsJQuery::$css_tpl,
+                            $url
+                        );
+                    },
+                    array_values(self::unique(wbForms::$CSS))
+                ));
+            // inline CSS
+            if(count(wbForms::$INLINECSS))
+                $output  .= implode("\n",array_map(
+                    function($css) {
+                        return sprintf(
+                            wbFormsJQuery::$inline_css_tpl,
+                            $css
+                        );
+                    },
+                    array_values(self::unique(wbForms::$INLINECSS))
+                ));
+            // jQuery JS
+            $output  .= implode("\n",array_map(
+                function($script) {
+                    return sprintf(
+                        wbFormsJQuery::$script_tpl,
+                        $script, NULL
+                    );
+                },
+                array_values(self::$scripts)
+            ));
+            // other JS
+            if(count(wbForms::$JS))
+            {
+                foreach(wbForms::$JS as $item)
+                {
+                    if(!isset($seen_src[$item['src']]))
+                    {
+                        $output.= sprintf(
+                            wbFormsJQuery::$script_tpl,
+                            $item['src'], $item['attr']
+                        );
+                        $seen_src[$item['src']] = 1;
+                    }
+                }
+            }
+            // inline JS
+            $output  .= implode("\n",array_map(
+                function($script) {
+                    return sprintf(
+                        wbFormsJQuery::$script_tpl,
+                        $script
+                    );
+                },
+                array_values(wbForms::$INLINEJS)
+            ));
+            self::log('headers returned',7);
+            self::log($output,7);
+            define('WBLIB2_HEADERS_SENT',1);
+            return $output;
+        }   // end function getHeaders()
+
+        /**
+         *
+         * @access public
+         * @return
+         **/
+        public static function render()
+        {
+            global $tpl;
+            $output = $code = NULL;
+            $space  = str_repeat(' ',16);
+            $code   = file_get_contents(dirname(__FILE__).'/forms/jQl.min.js')
+                    . "// fallback: if there's no local jQuery after some time, load from CDN
+var wbforms_fallback_timer = setTimeout(function(){alert('loading jQuery from CDN');jQl.loadjQ('https://ajax.googleapis.com/ajax/libs/jquery/2.0.3/jquery.min.js');},5000);
+jQl.boot(function(){clearTimeout(wbforms_fallback_timer);});\n";
+            foreach(self::$globals as $key => $value)
+            {
+                $code .= 'var wbforms_'.$key.' = "'.$value.'";'."\n";
+            }
+            $code .= "jQl.loadjQdep('http://localhost/_projects/bcwa/modules/lib_wblib/wblib/forms/forms.js');\n";
+
+            // add any other JS
+            $code .= implode("\n", wbForms::$INLINEJS);
+
+            // add UI components
+            if(count(self::$ui_components))
+            {
+                // attach components
+                if(count(self::$attach_comp))
+                {
+                    global $elem,$space;
+                    foreach(self::$attach_comp as $elem => $comps)
+                    {
+                        $comps = self::unique($comps);
+                        // '$("#%s").%s(%s)'
+                        $code .= implode("\n$space", array_map(
+                            function($k,$v) {
+                                global $elem,$space;
+                                return sprintf(
+                                    $space.wbFormsJQuery::$comp_tpl,
+                                    $elem, $k, $v
+                                )."\n";
+                            },
+                            array_keys($comps[0]),
+                            array_values($comps[0])
+                        ));
+                    }
+                }
+
+            }
+
+            return sprintf(self::$tpl,$code);
+        }   // end function render()
+
+        private static function unique($array)
+        {
         		$set = array();
         		$out = array();
         		foreach ( $array as $key => $val ) {
         			if ( is_array($val) ) {
-        			    $out[$key] = self::ArrayUniqueRecursive($val,$case_sensitive);
+        			    $out[$key] = self::unique($val);
         			}
         			else {
-        			    $seen_val = ( ( $case_sensitive === true ) ? $val : strtolower($val) );
+        			    $seen_val = strtolower($val);
         			    if( ! isset($set[$seen_val]) ) {
     						$out[$key] = $val;
     					}
@@ -1420,104 +2416,293 @@ if ( ! class_exists( 'wbForms', false ) )
                 	}
         		}
         		return $out;
-       		}   // end function ArrayUniqueRecursive()
+       		}   // end function unique()
 
-           /**
-             * Found here:
-             * http://www.php.net/manual/en/function.array-change-key-case.php#107715
-             **/
-            public static function array_change_key_case_unicode($arr, $c = CASE_LOWER) {
-                $c = ($c == CASE_LOWER) ? MB_CASE_LOWER : MB_CASE_UPPER;
-                foreach ($arr as $k => $v) {
-                    $ret[mb_convert_case($k, $c, "UTF-8")] = $v;
-                }
-                return $ret;
-            }   // end function array_change_key_case_unicode()
-
-            /**
-             * sort an array
-             *
-             *
-             *
-             **/
-            public static function sort ( $array, $index, $order='asc', $natsort=FALSE, $case_sensitive=FALSE )
-            {
-                if( is_array($array) && count($array)>0 ) {
-                     foreach(array_keys($array) as $key) {
-                         $temp[$key]=$array[$key][$index];
-                     }
-                     if(!$natsort) {
-                         ($order=='asc')? asort($temp) : arsort($temp);
-                     }
-                     else {
-                         ($case_sensitive)? natsort($temp) : natcasesort($temp);
-                         if($order!='asc') {
-                             $temp=array_reverse($temp,TRUE);
-                         }
-                     }
-
-                     foreach(array_keys($temp) as $key) {
-                         (is_numeric($key))? $sorted[]=$array[$key] : $sorted[$key]=$array[$key];
-                     }
-                     return $sorted;
-                }
-                return $array;
-            }   // end function sort()
-
-        }
-    }
+    }   // ---------- end class wbFormsJQuery ----------
 
     /**
-     * validation helper methods
+     * form builder protection class
      *
      * @category   wblib2
-     * @package    wbValidate
+     * @package    wbFormsProtect
      * @copyright  Copyright (c) 2013 BlackBird Webprogrammierung
      * @license    GNU LESSER GENERAL PUBLIC LICENSE Version 3
      */
-    if ( ! class_exists( 'wblib\wbValidate', false ) )
-    {
-        class wbValidate
-        {
-            /**
-             * fixes a path by removing //, /../ and other things
-             *
-             * @access public
-             * @param  string  $path - path to fix
-             * @return string
-             **/
-            public static function path( $path )
-            {
-                // remove / at end of string; this will make sanitizePath fail otherwise!
-                $path       = preg_replace( '~/{1,}$~', '', $path );
-                // make all slashes forward
-                $path       = str_replace( '\\', '/', $path );
-                // bla/./bloo ==> bla/bloo
-                $path       = preg_replace('~/\./~', '/', $path);
-                // resolve /../
-                // loop through all the parts, popping whenever there's a .., pushing otherwise.
-                $parts      = array();
-                foreach ( explode('/', preg_replace('~/+~', '/', $path)) as $part )
-                {
-                    if ($part === ".." || $part == '')
-                        array_pop($parts);
-                    elseif ($part!="")
-                        $parts[] = $part;
-                }
-                $new_path = implode("/", $parts);
-                // windows
-                if ( ! preg_match( '/^[a-z]\:/i', $new_path ) )
-                    $new_path = '/' . $new_path;
-                return $new_path;
-            }   // end function path()
-        }
-    }
+    class wbFormsProtect extends wbFormsBase {
+        private static $token_lifetime = 86400;
+        /**
+         * CSRF protection default settings; SHOULD be overwritten by caller
+         **/
+        public  static $config = array(
+			'secret'          => '!p"/.m4fk{ay{£1R0W0O',
+			'token_lifetime'  => '86400',
+			'token_fieldname' => 'fbseqmagictoken',
+            'dynamic'         => 'aq23S(X/<)PYSZ#;',
+            'redirect_to'     => NULL,
+        );
 
+/*******************************************************************************
+ * CHECK FOR ALLOWED DATA TYPES, USING PHP FILTERS
+ ******************************************************************************/
+
+        public static function check_boolean($var)
+        {
+            if (!is_bool($var))
+                $var = filter_var($var, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+            return filter_var($var,FILTER_VALIDATE_BOOLEAN,FILTER_NULL_ON_FAILURE);
+        }   // end function check_boolean()
+        
+        public static function check_email($var)
+        {
+            return filter_var($var,FILTER_VALIDATE_EMAIL);
+        }   // end function check_email()
+
+        public static function check_url($var)
+        {
+            return filter_var($var,FILTER_VALIDATE_URL);
+        }   // end function check_url()
+
+        public static function check_string($var)
+        {
+            if( is_callable(array('\wblib\wbValidateValidate', 'as_string')) === true )
+            {
+                return \wblib\wbValidateValidate::as_string($var);
+            }
+            else
+            {
+                return filter_var($var,FILTER_SANITIZE_STRING,FILTER_FLAG_STRIP_LOW|FILTER_FLAG_ENCODE_AMP);
+            }
+        }   // end function check_string()
+
+        public static function check_html($var)
+        {
+            $dom = new \DOMDocument;
+            $dom->loadHtml($var); // see docs for load, loadXml, loadHtml and loadHtmlFile
+            if (!count(libxml_get_errors())) {
+                return $var;
+            }
+            return false;
+        }   // end function check_html()
+
+        public static function check_int($var,$opt='')
+        {
+            list($min,$max) = explode(':',$opt);
+            if($min||$max) $opt = array();
+            if($min&&is_numeric((int)$min)) $opt['options']['min_range'] = $min;
+            if($max&&is_numeric((int)$max)) $opt['options']['max_range'] = $max;
+            return filter_var($var,FILTER_VALIDATE_INT,$opt);
+        }   // end function check_int()
+
+        /**
+         *
+         * @access public
+         * @return
+         **/
+        public static function check_array($incoming,$allowed)
+        {
+            $isIndexed = array_values($allowed) === $allowed;
+            if(!$isIndexed)
+                return in_array($incoming,$allowed);
+            else
+                return in_array($incoming,array_keys($allowed));
+        }   // end function check_array()
+        
+
+        /**
+         *
+         * @access public
+         * @return
+         **/
+        public static function checkToken($dynamic=NULL)
+        {
+            if(!$dynamic)
+            {
+                self::log('No dynamic part given, less security!',4);
+                $dynamic = self::$config['dynamic'];
+            }
+            if(!isset($_POST[self::$config['token_fieldname']]))
+            {
+                self::log('Missing token in form data!',1);
+                return false;
+            }
+            // get token from hidden field
+            $token = $_POST[self::$config['token_fieldname']];
+            $parts = explode( '-', $token );
+            if(count($parts)!==3)
+            {
+                self::log(sprintf('Invalid token - parts [%s], should be [3]',count($parts)),1);
+                return false;
+            }
+            $tokentime
+                = ( self::$config['token_lifetime'] )
+                ? self::$config['token_lifetime']
+                : self::$token_lifetime
+                ;
+			// secret time should not extend one day and not drop below 1 hour
+			if ( ! is_numeric($tokentime) || $tokentime > 86400 || $tokentime < 36000 ) {
+			    self::log(sprintf('Invalid token lifetime [%s] given; using the default (86400 = 1 day)',$tokentime),5);
+				$tokentime = 86400;
+			}
+            list( $token, $hash, $time ) = $parts;
+            // check if token is expired
+            if ($time < ( time() - $tokentime ) )
+            {
+                self::log(sprintf('Invalid token - is expired! (%s < %s)',$time,(time()-$tokentime)),4);
+                return false;
+            }
+            // check the secret
+            $secret = self::createSecret($dynamic);
+            if ( $hash != sha1( $secret.'-'.$dynamic.'-'.$token ) )
+            {
+                self::log('Invalid token - secret not matched!',1);
+                return false;
+            }
+            else {
+				return true;
+			}
+        }   // end function checkToken()
+        
+
+        /**
+         *
+         * @access public
+         * @return
+         **/
+        public static function createToken($dynamic=NULL)
+        {
+            if(!$dynamic)
+            {
+                self::log('No dynamic part given, less security!',4);
+                $dynamic = self::$config['dynamic'];
+            }
+            // create a random token
+            $token    = dechex(mt_rand());
+            // create a hash using the secret, the dynamic part, and the random token
+            $hash     = sha1( self::createSecret($dynamic).'-'.$dynamic.'-'.$token );
+            // now, at least, create the token
+            return $token.'-'.$hash.'-'.time();
+        }   // end function createToken()
+
+        /**
+         *
+         * @access public
+         * @return
+         **/
+        public static function getToken($dynamic=NULL)
+        {
+            return array(
+                'type'  => 'hidden',
+                'name'  => self::$config['token_fieldname'],
+                'value' => self::createToken($dynamic),
+            );
+        }   // end function getToken()
+
+		/**
+		 * creates a secret that contains server and user agent specific data
+		 * as part of the challenge
+		 *
+		 * -> add some extra randomness to the configured secret
+		 *
+		 * @access private
+		 * @param  string   $dynamic
+		 * @return string
+		 **/
+		private static function createSecret($dynamic)
+        {
+		    $secret     = self::$config['secret'];
+			$tokentime
+                = ( self::$config['token_lifetime'] )
+                ? self::$config['token_lifetime']
+                : self::$token_lifetime
+                ;
+			// secret time should not extend one day and not drop below 1 hour
+			if ( ! is_numeric($tokentime) || $tokentime > 86400 || $tokentime < 36000 ) {
+			    self::log('createSecret() - Invalid token lifetime given; using the default (86400 = 1 day)',4);
+				$tokentime = 86400;
+			}
+			$TimeSeed    = floor( time() / $tokentime ) * $tokentime;
+			$DomainSeed  = $_SERVER['SERVER_NAME'];
+			$Seed        = $TimeSeed + $DomainSeed;
+
+			// use some server specific data
+			$serverdata  = ( isset( $_SERVER['SERVER_SIGNATURE'] ) )   ? $_SERVER['SERVER_SIGNATURE']     : 'qN';
+			$serverdata .= ( isset( $_SERVER['SERVER_SOFTWARE'] ) )    ? $_SERVER['SERVER_SOFTWARE']      : 'qp';
+			$serverdata .= ( isset( $_SERVER['SERVER_NAME'] ) ) 	   ? $_SERVER['SERVER_NAME'] 		  : 'q8';
+			$serverdata .= ( isset( $_SERVER['SERVER_ADDR'] ) ) 	   ? $_SERVER['SERVER_ADDR'] 		  : 'q&';
+			$serverdata .= ( isset( $_SERVER['SERVER_PORT'] ) ) 	   ? $_SERVER['SERVER_PORT'] 		  : 'q1';
+			$serverdata .= ( isset( $_SERVER['SERVER_ADMIN'] ) )	   ? $_SERVER['SERVER_ADMIN'] 		  : 'q!';
+			$serverdata .= PHP_VERSION;
+
+			// add some browser data
+			$browser     = ( isset($_SERVER['HTTP_USER_AGENT']) )      ? $_SERVER['HTTP_USER_AGENT']      : 'xc';
+			$browser    .= ( isset($_SERVER['HTTP_ACCEPT_LANGUAGE']) ) ? $_SERVER['HTTP_ACCEPT_LANGUAGE'] : 'x9';
+			$browser    .= ( isset($_SERVER['HTTP_ACCEPT_ENCODING']) ) ? $_SERVER['HTTP_ACCEPT_ENCODING'] : 'x?';
+			$browser	.= ( isset($_SERVER['HTTP_ACCEPT_CHARSET']) )  ? $_SERVER['HTTP_ACCEPT_CHARSET']  : 'xB';
+
+			// add seed to current secret
+			$secret     .= md5($Seed).md5($serverdata).md5($browser);
+
+			return $secret;
+		}   // end function createSecret()
+
+        /**
+         *
+         *
+         *
+         *
+         **/
+		private static function terminateSession($strict=true,$reason=NULL)
+        {
+		    // unset session variables
+		    if (isset($_SESSION)) {
+		        $_SESSION = array();
+		    }
+		    if (isset($HTTP_SESSION_VARS)) {
+		        $HTTP_SESSION_VARS = array();
+		    }
+		    // unset globals
+		    unset( $_REQUEST );
+            unset( $_POST    );
+            unset( $_GET     );
+            unset( $_SERVER  );
+
+		    session_unset();
+
+			if (self::$config['redirect_to'] && self::$config['redirect_to'] !== '')
+            {
+			    if ( ! headers_sent() )
+                {
+		            header("Location: " . self::$config['redirect_to'] );
+		        }
+				else
+                {
+		            self::log('Unable to redirect. Headers already sent.',4);
+		        }
+		        if ( $strict ) { die; }
+            }
+            else {
+	            self::log('Unable to redirect. No redirect location.',4);
+	        }
+	        if ( $strict ) { die; }
+		}   // end function terminateSession()
+        
+    }   // ---------- end class wbFormsProtect() ----------
+
+    /**
+     * form builder exception class; prints exceptions to log file
+     *      (level 'error' = 3)
+     *
+     * @category   wblib2
+     * @package    wbFormsException
+     * @copyright  Copyright (c) 2013 BlackBird Webprogrammierung
+     * @license    GNU LESSER GENERAL PUBLIC LICENSE Version 3
+     */
     class wbFormsException extends \Exception {
-        public function __construct($message, $code = 0) {
-            wbForms::log($message,7);
+        public function __construct($message, $code = 0)
+        {
+            wbFormsBase::log($message,3);
             parent::__construct($message, $code);
         }
     }
 
-}
+}       // ---------- end class_exists('wbForms') ----------

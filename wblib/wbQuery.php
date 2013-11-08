@@ -123,20 +123,22 @@ if ( ! class_exists( 'wbQuery', false ) )
          *
          * Note: Log messages are ignored if no Analog is available!
          *
-         * @access private
-         * @param  string   $message
-         * @param  integer  $level
-         * @return
+         * @access protected
+         * @param  string   $message - log message
+         * @param  integer  $level   - log level; default: 3 (error)
+         * @return void
          **/
-        private static function log($message, $level = 3)
+        public static function log($message, $level = 3)
         {
-            if($level<>self::$loglevel) return;
+            $class = get_called_class();
+            if($class != 'wblib\wbQuery') return;
+            if($level>$class::$loglevel)  return;
             if( !self::$analog && !self::$analog == -1)
             {
                 if(file_exists(dirname(__FILE__).'/3rdparty/Analog/wblib.init.inc.php'))
                 {
                     include_once(dirname(__FILE__).'/3rdparty/Analog/wblib.init.inc.php');
-                    wblib_init_3rdparty(dirname(__FILE__).'/debug/','wbQuery',self::$loglevel);
+                    wblib_init_3rdparty(dirname(__FILE__).'/debug/','wbQuery',$class::$loglevel);
                     self::$analog = true;
                 }
                 else
@@ -144,9 +146,16 @@ if ( ! class_exists( 'wbQuery', false ) )
                     self::$analog = -1;
                 }
             }
-
             if ( self::$analog !== -1 )
-                \Analog::log($message,$level);
+            {
+                if(substr($message,0,1)=='<')
+                    self::$spaces--;
+                self::$spaces = ( self::$spaces > 0 ? self::$spaces : 0 );
+                $line = str_repeat('    ',self::$spaces).$message;
+                if(substr($message,0,1)=='>')
+                    self::$spaces++;
+                \Analog::log($line,$level);
+            }
         }   // end function log()
         
     }
@@ -212,11 +221,15 @@ if ( ! class_exists( 'wbQueryDriver', false ) )
         /**
          * logger
          **/
-        private static $analog          = NULL;
+        private static   $analog        = NULL;
+        /**
+         * space before log message
+         **/
+        protected static $spaces        = 0;
         /**
          * log level
          **/
-        public static $loglevel         = 7;
+        public static    $loglevel      = 7;
 
 // ----- Operators used in WHERE-clauses -----
         protected $operators  = array(
@@ -308,6 +321,45 @@ if ( ! class_exists( 'wbQueryDriver', false ) )
         }   // end function __construct()
 
         /**
+         * accessor to Analog (if installed)
+         *
+         * Note: Log messages are ignored if no Analog is available!
+         *
+         * @access protected
+         * @param  string   $message - log message
+         * @param  integer  $level   - log level; default: 3 (error)
+         * @return void
+         **/
+        public static function log($message, $level = 3)
+        {
+            $class = get_called_class();
+            if($level>$class::$loglevel)  return;
+            if( !$class::$analog && !$class::$analog == -1)
+            {
+                if(file_exists(dirname(__FILE__).'/3rdparty/Analog/wblib.init.inc.php'))
+                {
+                    include_once(dirname(__FILE__).'/3rdparty/Analog/wblib.init.inc.php');
+                    wblib_init_3rdparty(dirname(__FILE__).'/debug/',$class,$class::$loglevel);
+                    $class::$analog = true;
+                }
+                else
+                {
+                    $class::$analog = -1;
+                }
+            }
+            if ( $class::$analog !== -1 )
+            {
+                if(substr($message,0,1)=='<')
+                    $class::$spaces--;
+                self::$spaces = ( self::$spaces > 0 ? self::$spaces : 0 );
+                $line = str_repeat('    ',self::$spaces).$message;
+                if(substr($message,0,1)=='>')
+                    self::$spaces++;
+                \Analog::log($line,$level);
+            }
+        }   // end function log()
+
+        /**
          * Create valid DSN and store it for later use
          *
          * @access public
@@ -344,7 +396,6 @@ if ( ! class_exists( 'wbQueryDriver', false ) )
     	public function getLastStatement() {
     	    return $this->_lastStatement;
     	}   // end function getLastStatement()
-
 
 /*******************************************************************************
  * SQL BUILDER
@@ -384,9 +435,6 @@ if ( ! class_exists( 'wbQueryDriver', false ) )
             if(isset($this->hashes) && count($this->hashes) && array_key_exists($hash,$this->hashes))
             {
                 $this->statement = $this->hashes[$hash];
-                $params = isset( $options['params'] ) && is_array( $options['params'] )
-                        ? $this->params( $options['params'] )
-                        : NULL;
             }
             else
             {
@@ -406,10 +454,6 @@ if ( ! class_exists( 'wbQueryDriver', false ) )
 
                 $limit  = isset( $options['limit'] )
                         ? $this->limit( $options['limit'] )
-                        : NULL;
-
-                $params = isset( $options['params'] ) && is_array( $options['params'] )
-                        ? $this->params( $options['params'] )
                         : NULL;
 
                 $group  = isset( $options['group_by'] )
@@ -436,6 +480,10 @@ if ( ! class_exists( 'wbQueryDriver', false ) )
                 $this->hashes[$hash] = $this->statement;
             }
 
+            $params = isset( $options['params'] ) && is_array( $options['params'] )
+                    ? $this->params( $options['params'] )
+                    : NULL;
+
             self::log('executing statement (interpolated for debugging)',7);
             self::log(self::interpolateQuery($this->statement,$params),7);
             $this->_lastStatement = self::interpolateQuery($this->statement,$params);
@@ -458,19 +506,221 @@ if ( ! class_exists( 'wbQueryDriver', false ) )
             else
             {
                 if ( $stmt->errorInfo() )
-                {
                     $error = '['.implode( "] [", $stmt->errorInfo() ).']';
-                }
                 $this->setError( $error, 'fatal' );
                 return false;
             }
             
         }   // end function search()
 
+        /**
+         * insert data; returns false on error, true on success
+         *
+         * Use isError() and getError() to check for errors!
+         *
+         * @access public
+         * @param  array  $options
+         * @return mixed
+         **/
+        public function insert( $options )
+        {
 
+            if ( ! isset( $options['tables'] ) )
+            {
+                $this->setError('no tables!','fatal');
+                return NULL;
+            }
+            if ( ! isset( $options['values'] ) )
+            {
+                $this->setError('no tables!','fatal');
+                return NULL;
+            }
 
-        public function insert ( $options ) {}
-        public function update ( $options ) {}
+            $this->setError( NULL ); // reset error stack
+            $this->statement = NULL; // reset statement
+
+            $do     = isset( $options['do'] )
+                    ? $options['do']
+                    : 'INSERT';
+
+            $options['__is_insert'] = true;
+
+            $params = isset( $options['params'] ) && is_array( $options['params'] )
+                    ? $this->params( $options['params'] )
+                    : NULL;
+
+            // cache statement
+            $hash = (md5(serialize($options)));
+            if(isset($this->hashes) && count($this->hashes) && array_key_exists($hash,$this->hashes))
+            {
+                $this->statement = $this->hashes[$hash];
+                $params = isset( $options['params'] ) && is_array( $options['params'] )
+                        ? $this->params( $options['params'] )
+                        : NULL;
+            }
+            else
+            {
+
+                $tables = $this->map_tables( $options['tables'], $options );
+                $values = array();
+                $fields = NULL;
+
+                if ( isset($options['values']) )
+                {
+                    if ( ! is_array($options['values']) )
+                        $options['values'] = array($options['values']);
+                    foreach ( $options['values'] as $v )
+                        $values[] = '?';
+                }
+
+                if ( isset( $options['fields'] ) ) {
+                    if ( ! is_array( $options['fields'] ) )
+                        $options['fields'] = array( $options['fields'] );
+                    $fields = '( `'
+                            . implode( '`, `', $options['fields'] )
+                            . '` )';
+                }
+
+                // create the statement
+                $this->statement
+                    = "$do INTO $tables $fields"
+                    . " VALUES ( "
+                    . implode( ', ', $values )
+                    . " )"
+                    ;
+            }
+
+            self::log('executing statement (interpolated for debugging)',7);
+            self::log(self::interpolateQuery($this->statement,$params),7);
+            $this->_lastStatement = self::interpolateQuery($this->statement,$params);
+
+            $stmt      = $this->prepare( $statement );
+
+            if ( ! is_object( $stmt ) )
+            {
+                $error_info = '['.implode( "] [", $this->errorInfo() ).']';
+                $this->setError( 'prepare() ERROR: '.$error_info, 'fatal'  );
+                return false;
+            }
+
+            if ( $stmt->execute( $params ) ) {
+                self::log(sprintf('statement successful: %s',$this->statement),7);
+                // if it's an insert, save the id
+                if ( $do == 'INSERT' ) {
+                    $this->lastInsertID = $this->lastInsertId();
+                }
+                return true;
+            }
+            else
+            {
+                if ( $stmt->errorInfo() )
+                    $error = '['.implode( "] [", $stmt->errorInfo() ).']';
+                $this->setError( $error, 'fatal' );
+                return false;
+            }
+        }   // end function insert()
+
+        /**
+         * update data; returns false on error, true on success
+         *
+         * Use isError() and getError() to check for errors!
+         *
+         * @access public
+         * @param  array  $options
+         * @return mixed
+        **/
+        public function update( $options )
+        {
+
+            if ( ! isset( $options['tables'] ) )
+            {
+                $this->setError('no tables!','fatal');
+                return NULL;
+            }
+            if ( ! isset( $options['values'] ) )
+            {
+                $this->setError('no tables!','fatal');
+                return NULL;
+            }
+
+            $this->setError( NULL ); // reset error stack
+            $this->statement = NULL; // reset statement
+
+            // cache statement
+            $hash = (md5(serialize($options)));
+            if(isset($this->hashes) && count($this->hashes) && array_key_exists($hash,$this->hashes))
+            {
+                $this->statement = $this->hashes[$hash];
+            }
+            else
+            {
+                $tables = $this->map_tables( $options['tables'], $options );
+                $where  = isset( $options['where'] )
+                        ? $this->parse_where( $options['where'] )
+                        : NULL;
+
+        		// any errors so far?
+        		if ( $this->isError() ) {
+        		    // let the caller handle the error, just return false here
+        		    $this->setError('unable to prepare the statement!','fatal');
+                    return false;
+        		}
+
+                $carr = array();
+                if ( isset( $options['fields'] ) && ! is_array( $options['fields'] ) )
+                    $options['fields'] = array( $options['fields'] );
+                foreach ( $options['fields'] as $key )
+                    $carr[] = "$key = ?";
+
+                // create the statement
+                $this->statement
+                    = "UPDATE $tables SET "
+                    . implode( ', ', $carr )
+                    . " $where";
+
+                $this->hashes[$hash] = $this->statement;
+            }
+
+            if ( isset( $options['values'] ) && is_array( $options['values'] ) )
+                foreach( $options['values'] as $value )
+                    $params[] = $value;
+
+            if ( isset( $options['params'] ) )
+            {
+                if ( ! is_array( $options['params'] ) )
+                    $options['params'] = array($options['params']);
+                foreach( $options['params'] as $value )
+                    $params[] = $value;
+            }
+
+            self::log('executing update statement (interpolated for debugging)',7);
+            self::log(self::interpolateQuery($this->statement,$params),7);
+            $this->_lastStatement = self::interpolateQuery($this->statement,$params);
+
+            // create statement handle
+            $stmt   = $this->prepare( $this->statement );
+
+            if ( ! is_object( $stmt ) )
+            {
+                $error_info = '['.implode( "] [", $this->errorInfo() ).']';
+                $this->setError( 'prepare() ERROR: '.$error_info, 'fatal'  );
+                return false;
+            }
+
+            if ( $stmt->execute( $params ) )
+            {
+                return true;
+            }
+            else
+            {
+                if ( $stmt->errorInfo() )
+                    $error = '['.implode( "] [", $stmt->errorInfo() ).']';
+                $this->setError( $error, 'fatal' );
+                return false;
+            }
+
+        }   // end function update()
+
         public function delete ( $options ) {}
         public function replace ( $options ) {}
         public function truncate ( $options ) {}
@@ -512,10 +762,10 @@ if ( ! class_exists( 'wbQueryDriver', false ) )
          * @access protected
          * @param  mixed     $where - array or scalar
          * @return mixed     parsed WHERE statement or NULL
-         *
          **/
         public function parse_where( $where ) {
-            self::log( var_export($where,1), 7 );
+            $this->log('> parse_where()',7);
+            $this->log(var_export($where,1),7);
             if ( is_array( $where ) )
                 $where = implode( ' AND ', $where );
             // replace conjunctions
@@ -523,9 +773,11 @@ if ( ! class_exists( 'wbQueryDriver', false ) )
             // replace operators
             $string = $this->replaceOps( $string );
             if ( ! empty( $string ) ) {
-                self::log( $string, 7 );
+                $this->log( $string, 7 );
+                $this->log('< parse_where()',7);
                 return ' WHERE '.$string;
             }
+            $this->log('< parse_where() - returning NULL',7);
             return NULL;
         }   // end function parse_where()
 
@@ -538,9 +790,11 @@ if ( ! class_exists( 'wbQueryDriver', false ) )
          *
          **/
         protected function replaceOps( $string ) {
+            self::log('> replaceOps()',7);
             $reg_exp = implode( '|', array_keys( $this->operators ) );
             reset( $this->operators );
             self::log(sprintf('replacing (%s) from: [%s]', $reg_exp, $string), 7);
+            self::log('< replaceOps()',7);
             return preg_replace( "/(\s{1,})($reg_exp)(\s{1,})/eisx", '" ".$this->operators["\\2"]." "', $string );
         }   // end function replaceOps()
 
@@ -554,13 +808,15 @@ if ( ! class_exists( 'wbQueryDriver', false ) )
          **/
         protected function replaceConj( $string )
         {
-             $reg_exp = implode( '|', array_keys( $this->conjunctions ) );
-             self::log(sprintf('replacing (%s) from string [%s]', $reg_exp, $string), 7);
-             return preg_replace(
-                          "/(\s{1,})($reg_exp)(\s{1,})/eisx",
-                          '"\\1".$this->conjunctions["\\2"]."\\3"',
-                          $string
-                      );
+            self::log('> replaceConj()',7);
+            $reg_exp = implode( '|', array_keys( $this->conjunctions ) );
+            self::log(sprintf('replacing (%s) from string [%s]', $reg_exp, $string), 7);
+            self::log('< replaceConj()',7);
+            return preg_replace(
+                "/(\s{1,})($reg_exp)(\s{1,})/eisx",
+                '"\\1".$this->conjunctions["\\2"]."\\3"',
+                $string
+            );
         }   // end function replaceConj()
 
         /**
@@ -573,42 +829,21 @@ if ( ! class_exists( 'wbQueryDriver', false ) )
          **/
         protected function setError( $error, $level = 'error' )
         {
-            self::log(sprintf('setError(%s)',$error),7);
+            if(is_null($error))
+            {
+                $this->lasterror = NULL;
+                $this->errors    = array();
+                return;
+            }
+            self::log('> setError()',7);
+            $caller = debug_backtrace();
+            self::log(sprintf('text [%s], level [%s], caller: [%s]',$error,$level,var_export($caller[0],1)),7);
             $this->lasterror = $error;
             // push onto error stack
             if ( $error != NULL )
             	$this->errors[]  = $error;
+            self::log('< setError()',7);
         }   // end function setError()
-
-        /**
-         * accessor to Analog (if installed)
-         *
-         * Note: Log messages are ignored if no Analog is available!
-         *
-         * @access private
-         * @param  string   $message
-         * @param  integer  $level
-         * @return
-         **/
-        protected static function log($message, $level = 3)
-        {
-            if($level<>self::$loglevel) return;
-            if( !self::$analog && !self::$analog == -1)
-            {
-                if(file_exists(dirname(__FILE__).'/3rdparty/Analog/wblib.init.inc.php'))
-                {
-                    include_once(dirname(__FILE__).'/3rdparty/Analog/wblib.init.inc.php');
-                    wblib_init_3rdparty(dirname(__FILE__).'/debug/',get_called_class(),self::$loglevel);
-                    self::$analog = true;
-                }
-                else
-                {
-                    self::$analog = -1;
-                }
-            }
-            if ( self::$analog !== -1 )
-                \Analog::log($message,$level);
-        }   // end function log()
 
         /**
          * checks params for possible SQL injection code; uses setError() to log
@@ -620,6 +855,7 @@ if ( ! class_exists( 'wbQueryDriver', false ) )
          **/
         protected function params( $params )
         {
+            self::log('> params()',7);
             foreach ( $params as $i => $param )
             {
     			if ( ! $this->detectSQLInjection( $this->quote($param) ) ) {
@@ -628,10 +864,12 @@ if ( ! class_exists( 'wbQueryDriver', false ) )
     			}
     			else {
     				$this->setError('POSSIBLE SQL INJECTION DETECTED!', 'fatal');
+                    self::log('< params() - return NULL',7);
     				return NULL;
     			}
             }
             self::log('PARAMS: '.var_export($params,1), 7);
+            self::log('< params()',7);
             return $params;
         }   // end function params()
 
@@ -739,7 +977,11 @@ if ( ! class_exists( 'MySQL', false ) )
         /**
          * log level
          **/
-        public static $loglevel = 7;
+        public    static $loglevel = 7;
+        /**
+         * analog handler
+         **/
+        protected static $analog = NULL;
 
         /**
          *

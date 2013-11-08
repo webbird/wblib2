@@ -208,23 +208,21 @@ if ( ! class_exists( 'wbList', false ) )
          *
          * @access public
          * @param  array   $tree     - flat array
-         * @param  int     $current  - id of current item
+         * @param  array   $options  - options to be passed to buildList()
          * @param  boolean $as_array - return result as array; default: false
          * @return string  HTML
          **/
-        public static function buildBreadcrumb ( $tree, $current, $as_array = NULL )
+        public static function buildBreadcrumb ( $tree, $options, $as_array = NULL )
         {
             self::log('building breadcrumb from tree:'.var_export($tree,1),7);
             if ( ! empty($tree) && ! is_array( $tree ) ) {
                 self::log('no breadcrumb items to show',4);
                 return;
             }
-            $trail = self::getTrail( self::buildRecursion($tree), $current );
+            $trail = self::getTrail( self::buildRecursion($tree), $options['selected'] );
             if ( $as_array )
-            {
                 return $trail;
-            }
-            return self::buildList($trail);
+            return self::buildList($trail,$options);
         }   // end function buildBreadcrumb()
 
         /**
@@ -367,12 +365,20 @@ if ( ! class_exists( 'wbList', false ) )
                 {
                     self::log('handling children for:',var_export($option['value'],1),7);
 
-                    $text    = $option['value'][$title_key];
-                    $is_open = $option['value'][$isopen_key];
+                    $text        = $option['value'][$title_key];
+                    $is_open     = isset($option['value'][$isopen_key]) ? $option['value'][$isopen_key] : false;
                     $is_selected = ( isset($selected) && $selected == $option['value'][$id_key] );
 
                     $tab     = str_repeat( $space, ( count( $parent_stack ) + 1 ) * 2 - 1 );
-                    $li_css  = self::getListItemCSS($option['value'][$id_key],$option['value'][$level_key],$is_selected,true,$isfirst,$islast,$is_open);
+                    $li_css  = self::getListItemCSS(
+                        $option['value'][$id_key],
+                        $option['value'][$level_key],
+                        $is_selected,
+                        true,
+                        $isfirst,
+                        $islast,
+                        $is_open
+                    );
 
                     if ( isset( $option['value'][$href_key] ) )
                     {
@@ -518,7 +524,7 @@ if ( ! class_exists( 'wbList', false ) )
          * @param
          * @return  array
          **/
-        public static function buildRecursion ( &$items, $min = -1 )
+        public static function buildRecursion ( &$items, $min = -9 )
         {
             if ( ! empty( $items ) && ! is_array( $items ) )
             {
@@ -603,7 +609,6 @@ if ( ! class_exists( 'wbList', false ) )
                 }
 
             }
-
             if ( ! empty($tree) && is_array($tree) && count( $tree ) > 0 )
             {
                 // mark tree as already seen

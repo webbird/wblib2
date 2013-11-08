@@ -4,12 +4,13 @@ $FORMS = array(
     'example_login_form' => array(
         array(
             'type'     => 'legend',
-            'text'     => 'Login',
+            'label'     => 'Login',
         ),
         array(
             'type'     => 'text',
             'name'     => 'loginname',
             'label'    => 'Login name',
+            'title'    => 'Please enter your login name',
             'required' => true,
         ),
         array(
@@ -65,26 +66,44 @@ $FORMS = array(
             'type'     => 'date',
             'name'     => 'date',
             'label'    => 'Datefield (loads UI Datepicker)',
-            'infotext' => 'This will open an UI Datepicker to choose a date',
+            'title'    => 'This will open an UI Datepicker to choose a date',
+        ),
+        array(
+            'type'     => 'radiogroup',
+            'label'    => 'Radiogroup',
+            'name'     => 'rgroup2',
+            'options'  => array('opt1','opt2','opt3','opt4'),
+            'checked'  => 'opt1',
+            'title'    => 'Choose one',
         ),
         array(
             'type'     => 'text',
-            'name'     => 'field2',
-            'label'    => 'Field 2',
-            'infotext' => 'This is a tooltip',
-        ),
-        array(
-            'type'     => 'text',
-            'name'     => 'field3',
-            'label'    => 'Field 3',
+            'name'     => 'edit',
+            'label'    => 'Edit field',
+            'title'    => 'Allows an integer between 5 and 15',
+            'allow'    => 'int:5:15',
             'required' => true,
+            'missing'  => 'Please insert a digit between 5 and 15',
+            'invalid'  => 'Please insert a digit between 5 and 15',
+        ),
+        array(
+            'type'     => 'textarea',
+            'name'     => 'text',
+            'label'    => 'Textarea field',
+            'required' => true,
+        ),
+        array(
+            'type'     => 'checkboxgroup',
+            'label'    => 'Group of checkboxes',
+            'name'     => 'checkboxgrp1',
+            'options'  => array('Y'=>'Yes','N'=>'No'),
         ),
         array(
             'type'     => 'select',
             'name'     => 'select1',
             'label'    => 'Select Test',
             'options'  => array('Y','N'),
-            'infotext' => 'Please select something from the list',
+            'title'    => 'Please select something from the list',
         ),
         array(
             'type'     => 'select',
@@ -92,7 +111,7 @@ $FORMS = array(
             'label'    => 'Select Test with key/value pairs',
             'options'  => array('Y'=>'Yes','N'=>'No'),
             'selected' => 'N',#
-            'infotext' => 'Please select something from the list',
+            'title'    => 'Please select something from the list',
         ),
         array(
             'type'     => 'legend',
@@ -103,6 +122,12 @@ $FORMS = array(
             'label'    => 'Single checkbox',
             'name'     => 'checkbox1',
         ),
+        #array(
+        #    'type'     => 'wysiwyg',
+        #    'name'     => 'wysiwyg',
+        #    'label'    => 'WYSIWYG field',
+        #    'required' => true,
+        #),
         array(
             'type'     => 'radiogroup',
             'label'    => 'Radiogroup',
@@ -110,11 +135,12 @@ $FORMS = array(
             'options'  => array('bla','fasel','demo','nix'),
             'checked'  => 'demo',
         ),
-        array(
-            'type'     => 'checkboxgroup',
-            'label'    => 'Group of checkboxes',
-            'name'     => 'checkboxgrp1',
-            'options'  => array('Y'=>'Yes','N'=>'No'),
-        ),
+        #array(
+        #    'type'     => 'wysiwyg',
+        #    'name'     => 'wysiwyg2',
+        #    'label'    => 'Another WYSIWYG field',
+        #    'required' => true,
+        #),
+
     ),
 );
