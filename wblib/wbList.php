@@ -449,6 +449,7 @@ if ( ! class_exists( 'wbList', false ) )
                     // only add leaf if level <= maxlevel
                     if ( !isset($option['value'][$level_key]) || $option['value'][$level_key] <= $maxlevel )
                     {
+                        $is_selected = ( isset($selected) && $selected == $option['value'][$id_key] );
                         $li_css  = self::getListItemCSS($option['value'][$id_key],$option['value'][$level_key],$is_selected,false,$isfirst,$islast,false);
                         $text    = ( isset($option['value'][$title_key]) ? $option['value'][$title_key] : '' );
                         if ( isset( $option['value'][$href_key] ) )

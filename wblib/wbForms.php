@@ -145,7 +145,7 @@ if (!class_exists('wbForms',false))
             'fallback_path'   => NULL,
             'workdir'         => NULL,
             'add_breaks'      => true,
-            'required_span'   => '<span class="fbrequired" style="display:inline-block;width:16px;color:#B94A48;" title="This item is required">*</span>',
+            'required_span'   => '<span class="fbrequired" style="display:inline-block;vertical-align:top;width:16px;color:#B94A48;" title="%s">*</span>',
             'blank_span'      => '<span class="fbblank" style="display:inline-block;width:16px;">&nbsp;</span>',
             'label_align'     => 'right',
             'token'           => NULL,
@@ -200,22 +200,49 @@ if (!class_exists('wbForms',false))
          **/
         public static function t($message)
         {
-            self::log('<t()',7);
+            self::log('> t()',7);
             if( !self::$wblang && !self::$wblang == -1)
             {
+                self::log('Trying to load wbLang',7);
                 try
                 {
                     @include_once dirname(__FILE__).'/wbLang.php';
                     self::$wblang = wbLang::getInstance();
                     self::log(sprintf('wbLang loaded, current language [%s]',self::$wblang->current()),7);
+                    if(isset(self::$globals['lang_path']))
+                    {
+                        if(is_dir(self::path(self::$globals['lang_path'])))
+                        {
+                            if(is_dir(self::path(self::$globals['lang_path'])))
+                                self::$wblang->addPath(self::$globals['lang_path']);
+                            if(file_exists(self::path(pathinfo(self::$globals['lang_path'],PATHINFO_DIRNAME).'/languages/'.self::$wblang->current().'.php')))
+                                self::$wblang->addFile(self::$wblang->current());
+                        }
+                    }
                     $callstack = debug_backtrace();
                     $caller    = array_pop($callstack);
+                    // avoid deep recursion
+                    $i         = 0;
+                    while(!strcasecmp(dirname(__FILE__),$caller['file']))
+                    {
+                        if($i>=3) break;
+                        $i++;
+                        $caller    = array_pop($callstack);
+                    }
                     if(isset($caller['file']))
                     {
                         if(is_dir(self::path(pathinfo($caller['file'],PATHINFO_DIRNAME).'/languages')))
                             self::$wblang->addPath(self::path(pathinfo($caller['file'],PATHINFO_DIRNAME).'/languages'));
                         if(file_exists(self::path(pathinfo($caller['file'],PATHINFO_DIRNAME).'/languages/'.self::$wblang->current().'.php')))
                             self::$wblang->addFile(self::$wblang->current());
+                        // This is for BlackCat CMS, filtering backend paths
+                        if(isset($caller['args']) && isset($caller['args'][0]) && file_exists($caller['args'][0]))
+                        {
+                            if(is_dir(self::path(pathinfo($caller['args'][0],PATHINFO_DIRNAME).'/languages')))
+                                self::$wblang->addPath(self::path(pathinfo($caller['args'][0],PATHINFO_DIRNAME).'/languages'));
+                            if(file_exists(self::path(pathinfo($caller['args'][0],PATHINFO_DIRNAME).'/languages/'.self::$wblang->current().'.php')))
+                                self::$wblang->addFile(self::$wblang->current());
+                        }
                     }
                 }
                 catch ( wbFormsExection $e )
@@ -394,9 +421,11 @@ if (!class_exists('wbForms',false))
             self::log('element data',7);
             self::log(var_export($this->attr,1),7);
 
+            if(isset($this->attr['label']))
+            {
+                $this->attr['label'] = self::t($this->attr['label']);
             if(
-                   isset($this->attr['label'])
-                && !$this instanceof wbFormsElementLabel
+                       !$this instanceof wbFormsElementLabel
                 && !$this instanceof wbFormsElementLegend
                 && !$this instanceof wbFormsElementButton
             ) {
@@ -404,7 +433,7 @@ if (!class_exists('wbForms',false))
                 $label = new wbFormsElementLabel(
                     array(
                         'for'      => $this->attr['id'],
-                        'label'    => self::t($this->attr['label']),
+                            'label'    => $this->attr['label'],
                         'class'    => 'fblabel',
                         'is_radio' =>
                             (
@@ -419,6 +448,7 @@ if (!class_exists('wbForms',false))
                 );
                 $label->checkAttr();
                 $this->attr['label'] = $label->render();
+            }
             }
 
             if($this instanceof wbFormsElementLegend)
@@ -436,6 +466,9 @@ if (!class_exists('wbForms',false))
                                       . "\n"
                                       ;
             }
+
+            if(isset($this->attr['title']))
+                $this->attr['title'] = self::t($this->attr['title']);
 
             $replace = $with = array();
             foreach(array_keys($this->attributes) as $attr)
@@ -487,8 +520,13 @@ if (!class_exists('wbForms',false))
                           && !$this instanceof wbFormsElementLabel
                           && !$this instanceof wbFormsElementButton
                           && !$this instanceof wbFormsElementRadio
+                          && !$this instanceof wbFormsElementRadiogroup
                       )
+                    ? (
+                          ( $this instanceof wbFormsElement && isset($this->attr['type']) && $this->attr['type'] !== 'hidden' )
                     ? "<br />\n"
+                          : ''
+                      )
                     : ''
                   );
         }   // end function replaceAttr()
@@ -517,6 +555,19 @@ if (!class_exists('wbForms',false))
             self::log('> setAttr()',7);
         }   // end function setAttr()
 
+        /**
+         *
+         * @access public
+         * @return
+         **/
+        public function setValue($value)
+        {
+            self::log('> setValue()',7);
+            $field = $this->valueattr();
+            $this->attr[$field] = $value;
+            self::log('< setValue()',7);
+        }   // end function setValue()
+        
 
     }   // ----------    end class wbFormsBase    ----------
 
@@ -634,6 +685,19 @@ if (!class_exists('wbForms',false))
             self::log('< getInstanceFromFile()',7);
             return $obj;
         }   // end function getInstanceFromFile()
+
+        /**
+         *
+         * @access public
+         * @return
+         **/
+        public static function configure($formname,$array)
+        {
+            self::log('> configure()',7);
+            self::log(var_export($array,1),7);
+            self::$FORMS[$formname] = $array;
+            self::log('< configure()',7);
+        }   // end function configure()
 
         /**
          * load form configuration from a file
@@ -862,6 +926,19 @@ if (!class_exists('wbForms',false))
         }   // end function current()
 
         /**
+         * returns a list of available forms
+         *
+         * @access public
+         * @return array
+         **/
+        public static function listForms()
+        {
+            $forms = array_keys(self::$FORMS);
+            return $forms;
+        }   // end function listForms()
+        
+
+        /**
          * set attribute value(s)
          *
          * @access public
@@ -897,6 +974,20 @@ if (!class_exists('wbForms',false))
             }
             self::log('< setData()',7);
         }   // end function setData()
+
+        /**
+         * set error text shown above the form
+         *
+         * @access public
+         * @param  string  $msg
+         * @return
+         **/
+        public static function setError($msg)
+        {
+            self::log('> setError()',7);
+            self::log('< setError()',7);
+            return self::setInfo($msg,'fberror');
+        }   // end function setInfo()
 
         /**
          * set info text shown above the form
@@ -956,6 +1047,19 @@ if (!class_exists('wbForms',false))
             return false;
         }   // end function setForm()
 
+        /**
+         *
+         * @access public
+         * @return
+         **/
+        public static function resetForm($name='default')
+        {
+            self::log('> resetForm()',7);
+            if(isset(self::$FORMS[$name]))
+                wbFormsElementForm::reset($name);
+            self::log('< resetForm()',7);
+        }   // end function resetForm()
+        
         /***********************************************************************
          *    NON STATIC METHODS
          **********************************************************************/
@@ -1036,6 +1140,23 @@ if (!class_exists('wbForms',false))
             return wbFormsJQuery::getHeaders();
         }   // end function getHeaders()
 
+        /**
+         *
+         * @access public
+         * @return
+         **/
+        public static function getDisplayname($formname=NULL)
+        {
+            self::log('> getDisplayname()',7);
+            if(!$formname)
+                $formname = self::current();
+            if(isset(self::$FORMS[$formname]['display_name']))
+                return self::$FORMS[$formname]['display_name'];
+            else
+                return $formname;
+            self::log('< getDisplayname()',7);
+        }   // end function getDisplayname()
+        
         /**
          * tries to find element $name in ELEMENTS array; returns the
          * element (object) on success, false otherwise
@@ -1485,7 +1606,7 @@ echo "</textarea>";
             if(isset($this->attr['required']) && $this->attr['required'] !== false)
             {
                 if(!isset($this->attr['is_group']) || !$this->attr['is_group'])
-                    $this->attr['is_required'] = self::$globals['required_span'];
+                    $this->attr['is_required'] = sprintf(self::$globals['required_span'],self::t('This item is required'));
                 $this->attr['required'] = 'required'; // valid XHTML
             }
             else
@@ -1604,6 +1725,17 @@ echo "</textarea>";
             $output .= wbFormsJQuery::render();
             return $output;
         }   // end function render()
+
+        /**
+         *
+         * @access public
+         * @return
+         **/
+        public static function reset($name)
+        {
+            unset(self::$instances[$name]);
+        }   // end function reset()
+        
 
     }   // ----------   end class wbFormsElementForm  ----------
 
@@ -1792,6 +1924,7 @@ echo "</textarea>";
         public function render()
         {
             $this->checkAttr();
+            if(!isset($this->attr['options'])) $this->attr['options'] = array();
             $options   = array();
             $isIndexed = array_values($this->attr['options']) === $this->attr['options'];
             $sel       = array();
@@ -1799,6 +1932,7 @@ echo "</textarea>";
                 $sel[$this->attr['selected']] = 'selected="selected"';
             if(isset($this->attr['multiple']))
                 $this->attr['multiple'] = 'multiple="multiple"';
+            if(count($this->attr['options']))
             if($isIndexed)
                 foreach($this->attr['options'] as $item)
                     $options[] = '<option value="'.$item.'" '.( isset($sel[$item]) ? $sel[$item] : '' ).'>'.$item.'</option>'."\n";
@@ -1859,7 +1993,7 @@ echo "</textarea>";
         {
             wbFormsElementTextarea::$tpl
                 = '%label%%is_required%'
-                . '<textarea %name%%id%%class%%style%'
+                . '<textarea %name%%id%%class%%style%%title%'
                 . '%tabindex%%accesskey%%disabled%%readonly%%required%%onblur%%onchange%%onclick%%onfocus%%onselect%>'
                 . '%value%'
                 . '</textarea>'

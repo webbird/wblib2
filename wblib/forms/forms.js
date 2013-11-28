@@ -43,13 +43,13 @@ jQuery('document').ready(function($)
     jQuery('form.ui-widget [title]').each( function() {
         if(jQuery(this).is('div')) {
             jQuery(this).append(
-                '<span class="fbinfo ui-icon ui-icon-info" style="display:inline-block;width:20px;margin-left:5px;" title="' + jQuery(this).attr('title') + '">&nbsp;<\/span>'
+                '<span class="fbinfo ui-icon ui-icon-info" style="display:inline-block;vertical-align:top;width:20px;margin-left:5px;" title="' + jQuery(this).attr('title') + '">&nbsp;<\/span>'
             );
         }
         else {
             if(!jQuery(this).is('span')) {
                 jQuery(this).after(
-                    '<span class="fbinfo ui-icon ui-icon-info" style="display:inline-block;width:20px;margin-left:5px;" title="' + jQuery(this).attr('title') + '">&nbsp;<\/span>'
+                    '<span class="fbinfo ui-icon ui-icon-info" style="display:inline-block;vertical-align:top;width:20px;margin-left:5px;" title="' + jQuery(this).attr('title') + '">&nbsp;<\/span>'
                 );
             }
         }
