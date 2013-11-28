@@ -37,13 +37,17 @@ if ( ! class_exists( 'wbLang', false ) )
          **/
         public static  $instances  = array();
         /**
+         *
+         **/
+        private static $spaces     = 1;
+        /**
          * logger
          **/
         private static $analog     = NULL;
         /**
          * log level
          **/
-        public  static $loglevel    = 7;
+        public  static $loglevel   = 4;
         /**
          * array of default options
          **/
@@ -135,6 +139,16 @@ if ( ! class_exists( 'wbLang', false ) )
          * Will return the original string (but with placeholders replaced) if
          * the string is not found in language array.
          *
+         * To handle plurals, use
+         *    [[{{variable}} |singular|plural]]
+         *
+         * Example:
+         *    [[{{count}} |item|items]]
+         * Result
+         *    -> count 0: '0 items'
+         *    -> count 1: '1 item'
+         *    -> count 2: '2 items'
+         *
          * @access public
          * @param  string   $msg  - message to search for
          * @param  array    $attr - attributes to replace in string
@@ -142,15 +156,28 @@ if ( ! class_exists( 'wbLang', false ) )
          **/
         public static function translate($msg,$attr = array())
         {
+            self::log('> translate()',7);
+            self::log(sprintf('message ~%s~',$msg),7);
+
+            if(is_array($attr) && count($attr))
+                self::log(sprintf('params: [%s]',var_export($attr,1)),7);
+
             if ( empty( $msg ) || is_bool( $msg ) )
                 return $msg;
             // direct match
             if ( array_key_exists($msg, self::$_strings) )
                 $msg = self::$_strings[$msg];
+            self::log(sprintf('after direct match: ~%s~',$msg),7);
             // case insensitive match
             if ( self::$defaults['case_insensitive'] && array_key_exists($msg, self::$_strings_lo) )
                 $msg = self::$_strings_lo[$msg];
+            self::log(sprintf('after case insensitive match: ~%s~',$msg),7);
+
+            // get plurals
             preg_match_all( '~\[\[\s*?{{\s*?([^}].+?)\s*?}}\s*?\|\s*?([^\|].+?)\s*?\|\s*?([^\]].+?)\]\]~i', $msg, $matches, PREG_SET_ORDER );
+            self::log('preg_match_all result:',7);
+            self::log(var_export($matches,1),7);
+
             foreach ( $matches as $match )
             {
                 if ( isset($attr[$match[1]]) )
@@ -159,16 +186,20 @@ if ( ! class_exists( 'wbLang', false ) )
                     $string = ( (int)$num > 1 || (int)$num == 0 )
                             ? $match[3]
                             : $match[2];
+                    self::log(sprintf('replacing [%s] with [%s]',$match[0],$num.' '.$string),7);
                     $msg = str_replace($match[0], $num.' '.$string, $msg);
                 }
                 else
                 {
+                    self::log(sprintf('no such attr [%s], using [%s]',$match[1],$match[3]),7);
                     $msg = str_replace($match[0], '0 '.$match[3], $msg);
                 }
             }
             // replace attributes
             foreach ( $attr as $key => $value )
                 $msg = preg_replace( "~{{\s*$key\s*}}~i", $value, $msg );
+
+            self::log('< translate()',7);
 
             return $msg;
         } // end function translate()
@@ -281,8 +312,9 @@ if ( ! class_exists( 'wbLang', false ) )
          **/
         public static function addFile($file,$var=NULL)
         {
-            self::log('< addFile()',7);
+            self::log('> addFile()',7);
             $check_var = 'LANG';
+            $result    = false;
             if ( isset( $var ) )
             {
                 $var = str_ireplace( '$', '', $var );
@@ -298,9 +330,12 @@ if ( ! class_exists( 'wbLang', false ) )
                 {
                     self::log(sprintf('found language file [%s] in path [%s]',$file,$path),7);
                     self::checkFile(self::path($path.'/'.$file), $check_var);
-                    return true;
+                    $result = true;
+                    // add them all, so don't return after first match
+                    #return true;
                 }
             }
+            if(!$result)
             self::log(sprintf('language file [%s] not found!',$file),3);
             self::log('< addFile()',7);
         } // end function addFile ()
@@ -429,7 +464,7 @@ if ( ! class_exists( 'wbLang', false ) )
          * @param  integer  $level
          * @return
          **/
-        private static function log($message, $level = 3)
+        private static function log($message, $level = 0)
         {
             if($level<>self::$loglevel) return;
             if( !self::$analog && !self::$analog == -1)
@@ -445,8 +480,14 @@ if ( ! class_exists( 'wbLang', false ) )
                     self::$analog = -1;
                 }
             }
+            if(substr($message,0,1)=='<')
+                self::$spaces--;
+            self::$spaces = ( self::$spaces > 0 ? self::$spaces : 0 );
+            $line = str_repeat('    ',self::$spaces).$message;
+            if(substr($message,0,1)=='>')
+                self::$spaces++;
             if ( self::$analog )
-                \Analog::log($message,$level);
+                \Analog::log($line,$level);
         }   // end function log()
 
         /**
