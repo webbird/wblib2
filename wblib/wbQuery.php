@@ -110,7 +110,7 @@ if ( ! class_exists( 'wbQuery', false ) )
                     ? $options['driver']
                     : self::$driver;
             try {
-                $classname = 'wblib\\'.$driver;
+                $classname = '\\wblib\\'.$driver;
                 return new $classname($options);
             } catch (wbQueryException $e) {
                 self::log($e->getMessage);
@@ -161,7 +161,6 @@ if ( ! class_exists( 'wbQuery', false ) )
     }
 
     class wbQueryException extends \Exception {}
-}
 
 interface wbQuery_DriverInterface
 {
@@ -193,8 +192,6 @@ interface wbQuery_DriverInterface
  * @copyright  Copyright (c) 2013 BlackBird Webprogrammierung
  * @license    GNU LESSER GENERAL PUBLIC LICENSE Version 3
  */
-if ( ! class_exists( 'wbQueryDriver', false ) )
-{
     class wbQuery_Driver extends \PDO
     {
 
@@ -480,9 +477,16 @@ if ( ! class_exists( 'wbQueryDriver', false ) )
                 $this->hashes[$hash] = $this->statement;
             }
 
-            $params = isset( $options['params'] ) && is_array( $options['params'] )
-                    ? $this->params( $options['params'] )
-                    : NULL;
+            if ( isset($options['params']) )
+            {
+                if(!is_array($options['params']))
+                    $options['params'] = array($options['params']);
+                $params = $this->params($options['params']);
+            }
+            else
+            {
+                $params = NULL;
+            }
 
             self::log('executing statement (interpolated for debugging)',7);
             self::log(self::interpolateQuery($this->statement,$params),7);
@@ -590,11 +594,15 @@ if ( ! class_exists( 'wbQueryDriver', false ) )
                     ;
             }
 
+            if ( isset( $options['values'] ) && is_array( $options['values'] ) )
+                foreach( $options['values'] as $value )
+                    $params[] = $value;
+
             self::log('executing statement (interpolated for debugging)',7);
             self::log(self::interpolateQuery($this->statement,$params),7);
             $this->_lastStatement = self::interpolateQuery($this->statement,$params);
 
-            $stmt      = $this->prepare( $statement );
+            $stmt = $this->prepare( $this->statement );
 
             if ( ! is_object( $stmt ) )
             {
@@ -619,6 +627,22 @@ if ( ! class_exists( 'wbQueryDriver', false ) )
                 return false;
             }
         }   // end function insert()
+
+        /**
+         * replace data; returns false on error, true on success
+         * this is a wrapper calling insert(), so use the same options here!
+         *
+         * Use isError() and getError() to check for errors!
+         *
+         * @access public
+         * @param  array  $options
+         * @return mixed
+        **/
+        public function replace ( $options )
+        {
+            $options['do'] = 'REPLACE';
+            return $this->insert($options);
+        }   // end function replace()
 
         /**
          * update data; returns false on error, true on success
@@ -722,7 +746,6 @@ if ( ! class_exists( 'wbQueryDriver', false ) )
         }   // end function update()
 
         public function delete ( $options ) {}
-        public function replace ( $options ) {}
         public function truncate ( $options ) {}
 
 /*******************************************************************************
@@ -966,10 +989,7 @@ if ( ! class_exists( 'wbQueryDriver', false ) )
         }   // end function __initialize()
 
     }
-}
 
-if ( ! class_exists( 'MySQL', false ) )
-{
     class MySQL extends wbQuery_Driver implements wbQuery_DriverInterface
     {
         protected $port   = 3306;
@@ -977,7 +997,7 @@ if ( ! class_exists( 'MySQL', false ) )
         /**
          * log level
          **/
-        public    static $loglevel = 7;
+        public    static $loglevel = 4;
         /**
          * analog handler
          **/
@@ -1088,7 +1108,13 @@ if ( ! class_exists( 'MySQL', false ) )
 
             foreach ( $join as $index => $item )
             {
-                $join_string .= ( isset($options['jointype']) ? $options['jointype'] : $jointype )
+                $jointype     = isset($options['jointype'])
+                              ? ' '.strtoupper($options['jointype']).' '
+                              : $jointype
+                              ;
+                if(!substr_count(strtolower($jointype),' join '))
+                    $jointype .= ' JOIN ';
+                $join_string .= $jointype
                              .  $this->prefix.$tables[ $index + 1 ]
                              .  ' AS t'.($index+2).' ON '
                              .  $item;
@@ -1169,5 +1195,6 @@ if ( ! class_exists( 'MySQL', false ) )
             return NULL;
         }   // end function min()
 
-    }
+    }   // ---------- end class MySQL ----------
+
 }
