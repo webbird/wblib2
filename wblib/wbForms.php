@@ -58,7 +58,7 @@ if (!class_exists('wbForms',false))
         /**
          * log level
          **/
-        protected static $loglevel   = 4;
+        protected static $loglevel   = 0;
         /**
          * space before log message
          **/
@@ -140,17 +140,18 @@ if (!class_exists('wbForms',false))
          * globals for all classes
          **/
         protected static $globals    = array(
-            'var'             => 'FORMS',
-            'path'            => NULL,
-            'fallback_path'   => NULL,
-            'workdir'         => NULL,
             'add_breaks'      => true,
-            'required_span'   => '<span class="fbrequired" style="display:inline-block;vertical-align:top;width:16px;color:#B94A48;" title="%s">*</span>',
             'blank_span'      => '<span class="fbblank" style="display:inline-block;width:16px;">&nbsp;</span>',
+            'enable_hints'    => true,
+            'fallback_path'   => NULL,
             'label_align'     => 'right',
+            'path'            => NULL,
+            'required_span'   => '<span class="fbrequired" style="display:inline-block;vertical-align:top;width:16px;color:#B94A48;" title="%s">*</span>',
             'token'           => NULL,
             'token_lifetime'  => NULL,
-            'enable_hints'    => true,
+            'wblib_url'       => NULL,
+            'var'             => 'FORMS',
+            'workdir'         => NULL,
         );
         /**
          * object attributes
@@ -175,6 +176,10 @@ if (!class_exists('wbForms',false))
             {
                 self::log(sprintf('< __call() - calling method [%s]',$method),7);
                 return call_user_func_array(array($this, $method), $args);
+            }
+            else
+            {
+                self::log('no such method',7);
             }
             self::log('< __call()',7);
         }   // end function __call()
@@ -253,12 +258,12 @@ if (!class_exists('wbForms',false))
             }
             if( self::$wblang !== -1 )
             {
-                self::log('<t(translated)',7);
+                self::log('< t(translated)',7);
                 return self::$wblang->t($message);
             }
             else
             {
-                self::log('<t(original)',7);
+                self::log('< t(original)',7);
                 return $message;
             }
         }   // end function t()
@@ -424,35 +429,38 @@ if (!class_exists('wbForms',false))
             if(isset($this->attr['label']))
             {
                 $this->attr['label'] = self::t($this->attr['label']);
-            if(
+                if(
                        !$this instanceof wbFormsElementLabel
-                && !$this instanceof wbFormsElementLegend
-                && !$this instanceof wbFormsElementButton
-            ) {
-                $this->checkAttr();
-                $label = new wbFormsElementLabel(
-                    array(
-                        'for'      => $this->attr['id'],
+                    && !$this instanceof wbFormsElementLegend
+                    && !$this instanceof wbFormsElementButton
+                ) {
+                    $this->checkAttr();
+                    $label = new wbFormsElementLabel(
+                        array(
+                            'for'      => $this->attr['id'],
                             'label'    => $this->attr['label'],
-                        'class'    => 'fblabel',
-                        'is_radio' =>
-                            (
+                            'class'    => 'fblabel',
+                            'is_radio' =>
                                 (
-                                       substr($this->attr['type'],0,5) == 'radio'
-                                    || substr($this->attr['type'],0,8) == 'checkbox'
-                                )
-                                ? true
-                                : false
-                            ),
-                    )
-                );
-                $label->checkAttr();
-                $this->attr['label'] = $label->render();
-            }
+                                    (
+                                           substr($this->attr['type'],0,5) == 'radio'
+                                        || substr($this->attr['type'],0,8) == 'checkbox'
+                                    )
+                                    ? true
+                                    : false
+                                ),
+                        )
+                    );
+                    $label->checkAttr();
+                    $this->attr['label'] = $label->render();
+                }
             }
 
             if($this instanceof wbFormsElementLegend)
                 $this->attr['label'] = self::t($this->attr['label']);
+
+            if(isset($this->attr['value']))
+                $this->attr['value'] = self::t($this->attr['value']);
 
             if(!isset($this->attr['class']) && isset($this->attr['type']))
                 $this->attr['class'] = 'fb'.strtolower($this->attr['type']);
@@ -524,7 +532,7 @@ if (!class_exists('wbForms',false))
                       )
                     ? (
                           ( $this instanceof wbFormsElement && isset($this->attr['type']) && $this->attr['type'] !== 'hidden' )
-                    ? "<br />\n"
+                          ? "<br />\n"
                           : ''
                       )
                     : ''
@@ -564,7 +572,7 @@ if (!class_exists('wbForms',false))
         {
             self::log('> setValue()',7);
             $field = $this->valueattr();
-            $this->attr[$field] = $value;
+            $this->attr[$field] = self::t($value);
             self::log('< setValue()',7);
         }   // end function setValue()
         
@@ -1074,6 +1082,7 @@ if (!class_exists('wbForms',false))
          **/
         public function getForm($name=NULL,$return=true)
         {
+
             self::log('> getForm()',7);
 
             if(!$name) $name = self::$CURRENT;
@@ -1715,6 +1724,7 @@ echo "</textarea>";
          **/
         public function render()
         {
+            self::log('> wbFormsElementForm::render()',7);
             $elements = func_get_arg(0);
             // render form
             $this->attr['content']  = $elements;
@@ -1723,6 +1733,7 @@ echo "</textarea>";
             $output  = $this->replaceAttr();
             // add jQuery elements
             $output .= wbFormsJQuery::render();
+            self::log('< render()',7);
             return $output;
         }   // end function render()
 
@@ -1754,14 +1765,14 @@ echo "</textarea>";
     class wbFormsElementInfo extends wbFormsElement
     {
         protected static $tpl
-            = '<div%class%%style%>%label%</div>';
+            = '<div%class%%style%><span style="float:left;margin-right:.3em;" class="ui-icon ui-icon-info"></span>%label%</div>';
         /**
          * adds select specific attributes
          **/
         public function init()
         {
             $this->attributes['label'] = NULL;
-            $this->attr['class'] = 'ui-widget ui-widget-content ui-corner-all ui-helper-clearfix';
+            $this->attr['class'] = 'ui-widget ui-widget-content ui-corner-all ui-helper-clearfix ui-state-highlight';
             return $this;
         }
     }   // ---------- end class wbFormsElementLabel ----------
@@ -1933,12 +1944,12 @@ echo "</textarea>";
             if(isset($this->attr['multiple']))
                 $this->attr['multiple'] = 'multiple="multiple"';
             if(count($this->attr['options']))
-            if($isIndexed)
-                foreach($this->attr['options'] as $item)
-                    $options[] = '<option value="'.$item.'" '.( isset($sel[$item]) ? $sel[$item] : '' ).'>'.$item.'</option>'."\n";
-            else
-                foreach($this->attr['options'] as $value => $item)
-                    $options[] = '<option value="'.$value.'" '.( isset($sel[$value]) ? $sel[$value] : '' ).'>'.$item.'</option>'."\n";
+                if($isIndexed)
+                    foreach($this->attr['options'] as $item)
+                        $options[] = '<option value="'.$item.'" '.( isset($sel[$item]) ? $sel[$item] : '' ).'>'.$item.'</option>'."\n";
+                else
+                    foreach($this->attr['options'] as $value => $item)
+                        $options[] = '<option value="'.$value.'" '.( isset($sel[$value]) ? $sel[$value] : '' ).'>'.$item.'</option>'."\n";
             $this->attr['options'] = implode('',$options);
             //wbFormsJQuery::attach($this->attr['id'],'select2',"width:'250px'");
             return $this->replaceAttr();
@@ -2203,6 +2214,15 @@ echo "</textarea>";
             wbFormsJQuery::attach($this->attr['id'],'buttonset');
             return $this->replaceAttr();
         }
+        /**
+         *
+         * @access public
+         * @return
+         **/
+        public function valueattr()
+        {
+            return 'checked';
+        }   // end function valueattr()
     }   // ---------- end class wbFormsElementRadiogroup ----------
 
 
@@ -2342,6 +2362,7 @@ echo "</textarea>";
 
         public static function init()
         {
+            self::log('> jQuery::init()',7);
             wbFormsJQuery::$tpl
                 = '<script type="text/javascript">%s</script>';
             wbFormsJQuery::$css_tpl
@@ -2363,6 +2384,7 @@ echo "</textarea>";
                       'select2' => self::$globals['sel_cdn']
                   );
             wbForms::addCSSLink(self::$globals['sel_css']);
+            self::log('< jQuery::init()',7);
         }   // end function init()
 
         /**
@@ -2374,6 +2396,7 @@ echo "</textarea>";
          **/
         public static function addComponent($name)
         {
+            self::log('> jQuery::addComponent()',7);
             if ( ! isset(self::$ui_components[$name]) )
             {
                 self::log(sprintf('adding UI component [%s]',$name),7);
@@ -2382,6 +2405,7 @@ echo "</textarea>";
                     $name
                 );
             }
+            self::log('< jQuery::addComponent()',7);
         }   // end function addComponent()
 
         /**
@@ -2395,12 +2419,14 @@ echo "</textarea>";
          **/
         public static function attach($id,$comp,$opt=NULL)
         {
+            self::log('> jQuery::attach()',7);
             if(!isset(self::$attach_comp[$id]))
                 self::$attach_comp[$id] = array();
             array_push(
                 self::$attach_comp[$id],
                 array( $comp => $opt )
             );
+            self::log('< jQuery::attach()',7);
         }   // end function attach()
         
         /**
@@ -2410,6 +2436,7 @@ echo "</textarea>";
          **/
         public static function getHeaders()
         {
+            self::log('> jQuery::getHeaders()',7);
             $seen_src = array();
             // jQuery UI
             $output
@@ -2477,6 +2504,7 @@ echo "</textarea>";
             self::log('headers returned',7);
             self::log($output,7);
             define('WBLIB2_HEADERS_SENT',1);
+            self::log('< jQuery::getHeaders()',7);
             return $output;
         }   // end function getHeaders()
 
@@ -2487,10 +2515,15 @@ echo "</textarea>";
          **/
         public static function render()
         {
+            self::log('> jQuery::render()',7);
             global $tpl;
             $output = $code = NULL;
             $space  = str_repeat(' ',16);
-            $code   = file_get_contents(dirname(__FILE__).'/forms/jQl.min.js')
+/*******************************************************************************
+ * ACHTUNG HIER SIND URLS HARTVERDRAHTET! FIXEN!
+ ******************************************************************************/
+            $code   = 'var WBLIB_URL = "'.wbFormsBase::$globals['wblib_url'].'";'."\n"
+                    . file_get_contents(dirname(__FILE__).'/forms/jQl.min.js')
                     . "// fallback: if there's no local jQuery after some time, load from CDN
 var wbforms_fallback_timer = setTimeout(function(){alert('loading jQuery from CDN');jQl.loadjQ('https://ajax.googleapis.com/ajax/libs/jquery/2.0.3/jquery.min.js');},5000);
 jQl.boot(function(){clearTimeout(wbforms_fallback_timer);});\n";
@@ -2498,7 +2531,7 @@ jQl.boot(function(){clearTimeout(wbforms_fallback_timer);});\n";
             {
                 $code .= 'var wbforms_'.$key.' = "'.$value.'";'."\n";
             }
-            $code .= "jQl.loadjQdep('http://localhost/_projects/bcwa/modules/lib_wblib/wblib/forms/forms.js');\n";
+            $code .= "jQl.loadjQdep(WBLIB_URL + '/forms/forms.js');\n";
 
             // add any other JS
             $code .= implode("\n", wbForms::$INLINEJS);
@@ -2529,7 +2562,7 @@ jQl.boot(function(){clearTimeout(wbforms_fallback_timer);});\n";
                 }
 
             }
-
+            self::log('< jQuery::render()',7);
             return sprintf(self::$tpl,$code);
         }   // end function render()
 

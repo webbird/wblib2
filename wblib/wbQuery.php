@@ -745,7 +745,77 @@ interface wbQuery_DriverInterface
 
         }   // end function update()
 
-        public function delete ( $options ) {}
+        public function delete ( $options )
+        {
+            if ( ! isset( $options['tables'] ) )
+            {
+                $this->setError('no tables!','fatal');
+                return NULL;
+            }
+
+            $this->setError( NULL ); // reset error stack
+            $this->statement = NULL; // reset statement
+            $options['__is_delete'] = true;
+
+            // cache statement
+            $hash = (md5(serialize($options)));
+            if(isset($this->hashes) && count($this->hashes) && array_key_exists($hash,$this->hashes))
+            {
+                $this->statement = $this->hashes[$hash];
+                $params = isset( $options['params'] ) && is_array( $options['params'] )
+                        ? $this->params( $options['params'] )
+                        : NULL;
+            }
+            else
+            {
+                $tables = $this->map_tables( $options['tables'], $options );
+                $where  = isset( $options['where'] )
+                        ? $this->parse_where( $options['where'] )
+                        : NULL;
+
+                // create the statement
+                $this->statement
+                    = "DELETE FROM $tables "
+                    . " $where";
+
+                if ( isset($options['params']) )
+                {
+                    if(!is_array($options['params']))
+                        $options['params'] = array($options['params']);
+                    $params = $this->params($options['params']);
+                }
+                else
+                {
+                    $params = NULL;
+                }
+
+                self::log('executing statement (interpolated for debugging)',7);
+                self::log(self::interpolateQuery($this->statement,$params),7);
+                $this->_lastStatement = self::interpolateQuery($this->statement,$params);
+
+                $stmt = $this->prepare( $this->statement );
+
+                if ( ! is_object( $stmt ) )
+                {
+                    $error_info = '['.implode( "] [", $this->errorInfo() ).']';
+                    $this->setError( 'prepare() ERROR: '.$error_info, 'fatal'  );
+                    return false;
+                }
+
+                if ( $stmt->execute($params) ) {
+                    self::log(sprintf('statement successful: %s',$this->statement),7);
+                    return true;
+                }
+                else
+                {
+                    if ( $stmt->errorInfo() )
+                        $error = '['.implode( "] [", $stmt->errorInfo() ).']';
+                    $this->setError( $error, 'fatal' );
+                    return false;
+                }
+            }
+        }   // end function delete()
+
         public function truncate ( $options ) {}
 
 /*******************************************************************************
@@ -1001,7 +1071,7 @@ interface wbQuery_DriverInterface
         /**
          * analog handler
          **/
-        protected static $analog = NULL;
+        protected static $analog   = NULL;
 
         /**
          *

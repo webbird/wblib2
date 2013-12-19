@@ -2,7 +2,7 @@
 
 namespace wblib;
 
-require_once dirname(__FILE__).'/Analog.php';
+require dirname(__FILE__).'/Analog.php';
 
 function wblib_init_3rdparty($path,$classname,$level=\Analog::URGENT)
 {
@@ -24,12 +24,15 @@ function wblib_init_3rdparty($path,$classname,$level=\Analog::URGENT)
     );
 
     if( $level === \Analog::DEBUG ) {
+/*
         $handler[\Analog::DEBUG] = \Analog\Handler\LevelBuffer::init(
                     \Analog\Handler\File::init(
                         $path.$classname.'.debug.log'
                     ),
                     \Analog::DEBUG
                 );
+*/
+        $handler[\Analog::DEBUG] = \Analog\Handler\File::init($path.$classname.'.debug.log');
     }
 
     \Analog::handler(\Analog\Handler\Multi::init($handler));

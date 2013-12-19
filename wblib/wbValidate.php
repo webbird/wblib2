@@ -45,7 +45,7 @@ if ( ! class_exists( 'wbValidate', false ) )
         /**
          * log level
          **/
-        public  static $loglevel  = 4;
+        public  static $loglevel  = 0;
         /**
          * storage for incoming (tainted) data
          **/

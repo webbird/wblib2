@@ -9,8 +9,11 @@ jQuery('document').ready(function($)
     // append image dropdown
     if($("select.fbimageselect").length)
     {
-        $("head").append($("<link rel='stylesheet' href='http://localhost/_projects/bcwa/modules/lib_wblib/wblib/egg-0.5/egg.css' type='text/css' media='screen' />"));
-        $("head").append($("<script src='http://localhost/_projects/bcwa/modules/lib_wblib/wblib/egg-0.5/egg.js' type='text/javascript'></script>"));
+        $("head").append($("<link rel='stylesheet' href='" + WBLIB_URL + "/egg-0.5/egg.css' type='text/css' media='screen' />"));
+        $("head").append($("<script src='" + WBLIB_URL + "/egg-0.5/egg.js' type='text/javascript'></script>"));
+// *****************************************************************************
+// TODO: Das gehört hier nicht hin!
+// *****************************************************************************
         $("select.fbimageselect option").each(function(){
             $(this).text('http://localhost/_projects/bcwa/media/flexRecord/cat_pics/'+$(this).val());
         });
