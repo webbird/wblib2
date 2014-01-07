@@ -954,6 +954,29 @@ if (!class_exists('wbForms',false))
         }   // end function current()
 
         /**
+         *
+         * @access public
+         * @return
+         **/
+        public function createHoneypots($count=1)
+        {
+            self::log('> createHoneypots()',7);
+            $name = self::$CURRENT;
+            if(!$name)
+            {
+                self::hint('[createHoneypots()] No form set; you need to use <tt>setForm(&lt;NAME&gt;)</tt> first!');
+                self::log('< createHoneypots() - exit (no form set)',7);
+                exit;
+            }
+            if(!count(self::$ELEMENTS[$name]))
+                $this->setForm($name);
+            if(is_numeric($count) && $count>0)
+                for($i=1;$i<=$count;$i++)
+                    $this->addElement(array('type'=>'honeypot'));
+            self::log('< createHoneypots()',7);
+        }   // end function createHoneypots()
+        
+        /**
          * returns a list of available forms
          *
          * @access public
