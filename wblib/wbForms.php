@@ -144,13 +144,14 @@ if (!class_exists('wbForms',false))
             'blank_span'      => '<span class="fbblank" style="display:inline-block;width:16px;">&nbsp;</span>',
             'enable_hints'    => true,
             'fallback_path'   => NULL,
+            'honeypot_prefix' => 'fbhp_',
             'label_align'     => 'right',
             'path'            => NULL,
             'required_span'   => '<span class="fbrequired" style="display:inline-block;vertical-align:top;width:16px;color:#B94A48;" title="%s">*</span>',
             'token'           => NULL,
             'token_lifetime'  => NULL,
-            'wblib_url'       => NULL,
             'var'             => 'FORMS',
+            'wblib_url'       => NULL,
             'workdir'         => NULL,
         );
         /**
@@ -400,13 +401,14 @@ if (!class_exists('wbForms',false))
          * @param  integer  $length
          * @return string
          **/
-        protected static function generateName( $length = 5 ) {
+        protected static function generateName($length=8,$prefix='fbformfield_')
+        {
             for(
                    $code_length = $length, $newcode = '';
                    strlen($newcode) < $code_length;
                    $newcode .= chr(!rand(0, 2) ? rand(48, 57) : (!rand(0, 1) ? rand(65, 90) : rand(97, 122)))
             );
-            return 'fbformfield_'.$newcode;
+            return $prefix.$newcode;
         }   // end function generateName()
 
         /**
@@ -576,6 +578,21 @@ if (!class_exists('wbForms',false))
             self::log('< setValue()',7);
         }   // end function setValue()
         
+        /**
+         *
+         * @access public
+         * @return
+         **/
+        public function addOption($key,$value=NULL)
+        {
+            self::log('> addOption()',7);
+            if(isset($this->attr['options']) && is_array($this->attr['options']))
+                if($value)
+                    $this->attr['options'][$key] = self::t($value);
+                else
+                    $this->attr['options'][] = self::t($key);
+            self::log('< addOption()',7);
+        }   // end function addOption()
 
     }   // ----------    end class wbFormsBase    ----------
 
@@ -853,10 +870,13 @@ if (!class_exists('wbForms',false))
             $name    = self::current();
             $element = NULL;
 
-            if(!isset($elem['type']))
-                $elem['type'] = 'text';
             if(!isset($elem['name']))
                 $elem['name'] = wbFormsElement::generateName();
+            // always generate the names of honeypot fields!
+            if($elem['type']=='honeypot')
+                $elem['name'] = wbFormsElement::generateName(10,self::$globals['honeypot_prefix']);
+            if(!isset($elem['type']))
+                $elem['type'] = 'text';
             if(!isset($elem['id']))
                 $elem['id'] = $elem['name'];
 
@@ -1356,7 +1376,9 @@ echo "</textarea>";
             $formname = self::current();
             if(!isset(self::$FORMS[$formname]['__is_valid']))
                 self::validateForm($get_empty);
-            return self::$FORMS[$formname]['__is_valid'];
+            return isset(self::$FORMS[$formname]['__is_valid'])
+                 ? self::$FORMS[$formname]['__is_valid']
+                 : false;
         }   // end function isValid()
 
         /**
@@ -1384,17 +1406,48 @@ echo "</textarea>";
             self::log('incoming form data:',7);
             self::log(var_export($ref,1),7);
 
+            // retrieve registered elements
+            $elements = self::$FORMS[$formname];
+
+            // check incoming elements count; must not be > number of form elements!
+            /*******************************************************************
+                deactivated!
+                problems with csrf-magic, does not respect fbsecmagictoken
+                and buttons
+            if(count($ref) > count($elements))
+            {
+                self::$ERRORS[] = 'Invalid form!';
+                self::log('Invalid form element count; seems that additional form data was passed!',7);
+                self::log(sprintf('Expected [%s], got [%s]',count($elements),count($ref)),7);
+                self::log('< validateForm(false)',7);
+                return false;
+            }
+            */
+
             // validate token
             if(wbFormsProtect::checkToken(self::$globals['token']))
             {
-                // retrieve registered elements
-                $elements = self::$FORMS[$formname];
                 if(!count($elements))
                 {
                     self::hint('The given form seems to have no elements!');
                     self::log('< validateForm(false)',7);
                     return false;
                 }
+
+                // honeypot fields
+                foreach(array_keys($ref) as $name)
+                {
+                    if(!substr_compare($name,self::$globals['honeypot_prefix'],0,strlen(self::$globals['honeypot_prefix'])))
+                    {
+                        wbForms::setError(
+                            self::t('You filled a honeypot field. Are you sure you are a human?')
+                        );
+                        self::log('honeypot field found',7);
+                        self::log('< validateForm(false)',7);
+                        return false;
+                    }
+                }
+
                 // check
                 foreach($elements as $elem)
                 {
@@ -1442,7 +1495,7 @@ echo "</textarea>";
                                     self::$ERRORS[$elem['name']]
                                         = isset($elem['invalid'])
                                         ? self::t($elem['invalid'])
-                                        : self::t('You passed an invalid value')
+                                        : self::t('You passed an invalid value').' (method: '.$method.')'
                                         ;
                                     self::log(sprintf('invalid data for field [%s], allowed [%s]',$elem['name'],$elem['allow']),7);
                                     continue;
@@ -1460,7 +1513,7 @@ echo "</textarea>";
                                     self::$ERRORS[$elem['name']]
                                         = isset($elem['invalid'])
                                         ? self::t($elem['invalid'])
-                                        : self::t('You passed an invalid value')
+                                        : self::t('You passed an invalid value').' (method: '.$method.')'
                                         ;
                                     self::log(sprintf('invalid data for field [%s], allowed [%s]',$elem['name'],$elem['allow']),7);
                                     continue;
@@ -2246,6 +2299,45 @@ echo "</textarea>";
             return $this;
         }
     }   // ---------- end class wbFormsElementCheckboxgroup ----------
+
+    /**
+     * form builder honeypot element class; adds a honeypot (hidden) field
+     * to the form as some basic spam protection
+     *
+     * @category   wblib2
+     * @package    wbFormsElementHoneypot
+     * @copyright  Copyright (c) 2013 BlackBird Webprogrammierung
+     * @license    GNU LESSER GENERAL PUBLIC LICENSE Version 3
+     */
+    class wbFormsElementHoneypot extends wbFormsElement
+    {
+        /**
+         * output template
+         **/
+        protected static $tpl = NULL;
+        public function init()
+        {
+            self::log('> wbFormsElementHoneypot::init()',7);
+            self::$tpl =
+                 "<div class=\"fbhide\">"
+               . wbFormsElement::$tpl
+               . "</div>"
+               ;
+            parent::init();
+            return $this;
+        }   // end function init()
+
+        public function render()
+        {
+            $this->checkAttr();
+            $this->attr = array_merge($this->attr, array(
+                'type' => 'text',
+                'label' => 'Please leave this blank',
+            ));
+            return $this->replaceAttr();
+        }   // end function render()
+    }   // ---------- end class wbFormsElementHoneypot ----------
+
 
     /**
      * form builder date element class; uses jQuery DatePicker

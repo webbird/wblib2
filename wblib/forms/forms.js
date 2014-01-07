@@ -14,9 +14,9 @@ jQuery('document').ready(function($)
 // *****************************************************************************
 // TODO: Das gehört hier nicht hin!
 // *****************************************************************************
-        $("select.fbimageselect option").each(function(){
-            $(this).text('http://localhost/_projects/bcwa/media/flexRecord/cat_pics/'+$(this).val());
-        });
+        //$("select.fbimageselect option").each(function(){
+        //    $(this).text('http://localhost/_projects/bcwa/media/flexRecord/cat_pics/'+$(this).val());
+        //});
         $("select.fbimageselect").EggImageDropdown();
     }
 
