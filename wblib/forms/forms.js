@@ -1,29 +1,28 @@
 if(!jQuery.ui) {
     jQl.loadjQdep(wbforms_ui_cdn);
 }
-
 jQuery('document').ready(function($)
 {
-    // append UI theme
-    $("head").append($("<link rel='stylesheet' href='" + wbforms_ui_css.replace(/\%s/,wbforms_ui_theme) + "' type='text/css' media='screen' />"));
-    // append image dropdown
-    if($("select.fbimageselect").length)
-    {
-        $("head").append($("<link rel='stylesheet' href='" + WBLIB_URL + "/egg-0.5/egg.css' type='text/css' media='screen' />"));
-        $("head").append($("<script src='" + WBLIB_URL + "/egg-0.5/egg.js' type='text/javascript'></script>"));
-// *****************************************************************************
-// TODO: Das gehört hier nicht hin!
-// *****************************************************************************
-        //$("select.fbimageselect option").each(function(){
-        //    $(this).text('http://localhost/_projects/bcwa/media/flexRecord/cat_pics/'+$(this).val());
-        //});
-        $("select.fbimageselect").EggImageDropdown();
-    }
-
     function wbforms_attach_select2() {
         $("select").not('.fbimageselect').select2({width:'250px'});
     }
 
+    // append UI theme
+    $("head").append(
+        $("<link rel='stylesheet' href='" + wbforms_ui_css.replace(/\%s/,wbforms_ui_theme) + "' type='text/css' media='screen' />")
+    );
+    // append image dropdown
+    if($("select.fbimageselect").length)
+    {
+        $("head").append(
+            $("<link rel='stylesheet' href='" + WBLIB_URL + "/3rdparty/egg-0.5/egg.css' type='text/css' media='screen' />")
+        );
+        $("head").append(
+            $("<script src='" + WBLIB_URL + "/3rdparty/egg-0.5/egg.js' type='text/javascript'></script>")
+        );
+        $("select.fbimageselect").EggImageDropdown();
+    }
+    // append select2 plugin if available
     if(typeof select2 == 'undefined') {
         $("head").append($("<link rel='stylesheet' href='" + wbforms_sel_css + "' type='text/css' media='screen' />"));
         $.getScript(wbforms_sel_cdn,wbforms_attach_select2);
@@ -32,7 +31,8 @@ jQuery('document').ready(function($)
     {
         wbforms_attach_select2();
     }
-
+    // hide honeypot fields
+    jQuery('div.fbform .fbhide').hide();
     // add some styling to labels
     jQuery('div.fbform .fblabel').css('display','inline-block');
     jQuery('div.fbform .fblabel').css('width','250px');
@@ -87,5 +87,4 @@ jQuery('document').ready(function($)
     });
     // required
     jQuery('.fbrequired').addClass('ui-icon ui-icon-star');
-
 });

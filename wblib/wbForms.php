@@ -32,16 +32,6 @@
 namespace wblib;
 
 /**
- * form builder class
- *
- * @category   wblib2
- * @package    wbForms
- * @copyright  Copyright (c) 2013 BlackBird Webprogrammierung
- * @license    GNU LESSER GENERAL PUBLIC LICENSE Version 3
- */
-if (!class_exists('wbForms',false))
-{
-    /**
      * form builder base class
      *
      * @category   wblib2
@@ -49,6 +39,9 @@ if (!class_exists('wbForms',false))
      * @copyright  Copyright (c) 2013 BlackBird Webprogrammierung
      * @license    GNU LESSER GENERAL PUBLIC LICENSE Version 3
      */
+
+if (!class_exists('wblib\wbFormsBase',false))
+{
     class wbFormsBase
     {
         /**
@@ -242,7 +235,7 @@ if (!class_exists('wbForms',false))
                         if(file_exists(self::path(pathinfo($caller['file'],PATHINFO_DIRNAME).'/languages/'.self::$wblang->current().'.php')))
                             self::$wblang->addFile(self::$wblang->current());
                         // This is for BlackCat CMS, filtering backend paths
-                        if(isset($caller['args']) && isset($caller['args'][0]) && file_exists($caller['args'][0]))
+                        if(isset($caller['args']) && isset($caller['args'][0]) && is_scalar($caller['args'][0]) && file_exists($caller['args'][0]))
                         {
                             if(is_dir(self::path(pathinfo($caller['args'][0],PATHINFO_DIRNAME).'/languages')))
                                 self::$wblang->addPath(self::path(pathinfo($caller['args'][0],PATHINFO_DIRNAME).'/languages'));
@@ -393,6 +386,33 @@ if (!class_exists('wbForms',false))
                 $new_path = '/' . $new_path;
             return $new_path;
         }   // end function path()
+
+        /**
+         *
+         * @access protected
+         * @return
+         **/
+        protected static function getURL()
+        {
+            $class = get_called_class();
+            if(isset($class::$globals['wblib_url']) && $class::$globals['wblib_url'] != '' )
+                return $class::$globals['wblib_url'];
+            // DOCUMENT_ROOT + SCRIPT_NAME = abs. script path
+            // dirname - DOCUMENT_ROOT = rel. dir path
+            // HTTP_HOST + ( dirname - DOCUMENT_ROOT ) = my url
+            return
+                $_SERVER['REQUEST_SCHEME']
+                . '://'
+                . $_SERVER['HTTP_HOST']
+                . '/'
+                . str_ireplace(
+                      $_SERVER['DOCUMENT_ROOT'],
+                      '',
+                      str_replace('\\','/',dirname(__FILE__))
+                  )
+            ;
+        }   // end function getURL()
+
 
         /**
          * generates an unique element name if none is given
@@ -595,7 +615,18 @@ if (!class_exists('wbForms',false))
         }   // end function addOption()
 
     }   // ----------    end class wbFormsBase    ----------
+}
 
+    /**
+ * form builder class
+ *
+ * @category   wblib2
+ * @package    wbForms
+ * @copyright  Copyright (c) 2013 BlackBird Webprogrammierung
+ * @license    GNU LESSER GENERAL PUBLIC LICENSE Version 3
+ */
+if (!class_exists('wblib\wbForms',false))
+{
     /**
      * form builder form class
      *
@@ -1285,12 +1316,12 @@ echo "</textarea>";
          * @param  boolean $get_empty     - retrieve empty values too; default: false
          * @return array
          **/
-        public static function getData($always_return=false,$get_empty=false)
+        public static function getData($always_return=true,$get_empty=false)
         {
             self::log('> getData()',7);
             $formname = self::current();
             if(!isset(self::$FORMS[$formname]['__is_valid']))
-                self::isValid($get_empty);
+                self::isValid($get_empty); self::$FORMS[$formname]['__is_valid'] = false;
             if(!self::$FORMS[$formname]['__is_valid']&&!$always_return)
                 return NULL;
             return self::$DATA[$formname];
@@ -1460,8 +1491,10 @@ echo "</textarea>";
                 // honeypot fields
                 foreach(array_keys($ref) as $name)
                 {
-                    if(!substr_compare($name,self::$globals['honeypot_prefix'],0,strlen(self::$globals['honeypot_prefix'])))
-                    {
+                    if(
+                        !  substr_compare($name,self::$globals['honeypot_prefix'],0,strlen(self::$globals['honeypot_prefix']))
+                        && $ref[$name] != ''
+                    ) {
                         wbForms::setError(
                             self::t('You filled a honeypot field. Are you sure you are a human?')
                         );
@@ -1518,7 +1551,7 @@ echo "</textarea>";
                                     self::$ERRORS[$elem['name']]
                                         = isset($elem['invalid'])
                                         ? self::t($elem['invalid'])
-                                        : self::t('You passed an invalid value').' (method: '.$method.')'
+                                        : self::t('You passed an invalid value').( self::$loglevel==7 ? ' (method: '.$method.')' : '' )
                                         ;
                                     self::log(sprintf('invalid data for field [%s], allowed [%s]',$elem['name'],$elem['allow']),7);
                                     continue;
@@ -1536,7 +1569,7 @@ echo "</textarea>";
                                     self::$ERRORS[$elem['name']]
                                         = isset($elem['invalid'])
                                         ? self::t($elem['invalid'])
-                                        : self::t('You passed an invalid value').' (method: '.$method.')'
+                                        : self::t('You passed an invalid value').( self::$loglevel==7 ? ' (method: '.$method.')' : '' )
                                         ;
                                     self::log(sprintf('invalid data for field [%s], allowed [%s]',$elem['name'],$elem['allow']),7);
                                     continue;
@@ -2634,18 +2667,27 @@ echo "</textarea>";
             global $tpl;
             $output = $code = NULL;
             $space  = str_repeat(' ',16);
-/*******************************************************************************
- * ACHTUNG HIER SIND URLS HARTVERDRAHTET! FIXEN!
- ******************************************************************************/
-            $code   = 'var WBLIB_URL = "'.wbFormsBase::$globals['wblib_url'].'";'."\n"
-                    . file_get_contents(dirname(__FILE__).'/forms/jQl.min.js')
-                    . "// fallback: if there's no local jQuery after some time, load from CDN
-var wbforms_fallback_timer = setTimeout(function(){alert('loading jQuery from CDN');jQl.loadjQ('https://ajax.googleapis.com/ajax/libs/jquery/2.0.3/jquery.min.js');},5000);
-jQl.boot(function(){clearTimeout(wbforms_fallback_timer);});\n";
+
+            // set base URL
+            if(wbFormsBase::$globals['wblib_url'])
+                $code = "\n".$space.'var WBLIB_URL = "'.wbFormsBase::$globals['wblib_url'].'";'."\n";
+            else
+                $code = "\n".$space.'var WBLIB_URL = "'.wbFormsBase::getURL().'";'."\n";
+
+            // set other vars (CSS and JS locations)
             foreach(self::$globals as $key => $value)
             {
                 $code .= 'var wbforms_'.$key.' = "'.$value.'";'."\n";
             }
+
+            // include jQl
+            $code .= file_get_contents(dirname(__FILE__).'/forms/jQl.min.js')
+                  .  "\n$space"."if (typeof jQuery === 'undefined') {\n"
+                  .  "$space    loadjQ(wbforms_core_cdn);\n"
+                  .  "$space}\n"
+                  ;
+
+            // include our JS
             $code .= "jQl.loadjQdep(WBLIB_URL + '/forms/forms.js');\n";
 
             // add any other JS
