@@ -115,6 +115,9 @@ if ( ! class_exists( 'wbQuery', false ) )
             } catch (wbQueryException $e) {
                 self::log($e->getMessage);
                 echo $e->getMessage();
+            } catch (PDOException $e) {
+                self::log($e->getMessage);
+                echo $e->getMessage();
             }
         }   // end function __connect()
 
@@ -180,7 +183,10 @@ interface wbQuery_DriverInterface
     function parse_join       ( $tables   , $options );
     function parse_where      ( $where );
     function max              ( $fieldname, $options );
-    function showTables       ();
+    function sqlImport        ( $import, $replace_prefix );
+    function showTables       ( $ignore_prefix );
+    function dumpTable        ( $table, $structure_only, $remove_prefix, $ignore );
+    function dumpAllTables    ( $ignore_prefix );
 }   // end interface wbQuery_DriverInterface
 
 
@@ -313,7 +319,12 @@ interface wbQuery_DriverInterface
                 parent::__construct( $this->dsn, $this->user, $this->getDriverOptions() );
             }
             else {
+                try {
                 parent::__construct( $this->dsn, $this->user, $this->pass, $this->getDriverOptions() );
+                } catch (PDOException $e) {
+                    self::log($e->getMessage);
+                    echo $e->getMessage();
+                }
             }
         }   // end function __construct()
 
@@ -1039,6 +1050,50 @@ interface wbQuery_DriverInterface
         }   // end function interpolateQuery()
 
         /**
+         * extracts SQL statements from a string and executes them as single
+         * statements
+         *
+         * @access public
+         * @param  string  $import
+         *
+         **/
+        public function sqlImport($import,$replace_prefix=NULL,$replace_with=NULL)
+        {
+            $errors = array();
+            $import = preg_replace( "%/\*(.*)\*/%Us", ''          , $import );
+            $import = preg_replace( "%^--(.*)\n%mU" , ''          , $import );
+            $import = preg_replace( "%^$\n%mU"      , ''          , $import );
+            if($replace_prefix)
+                $import = preg_replace( "%".$replace_prefix."%", $replace_with, $import );
+            $import = preg_replace( "%\r?\n%"       , ''          , $import );
+            $import = str_replace ( '\\\\r\\\\n'    , "\n"        , $import );
+            $import = str_replace ( '\\\\n'         , "\n"        , $import );
+            // split into chunks
+            $sql = preg_split(
+                '~(insert\s+(?:ignore\s+)into\s+|update\s+|replace\s+into\s+|create\s+table|truncate\s+table|delete\s+from)~i',
+                $import,
+                -1,
+                PREG_SPLIT_DELIM_CAPTURE|PREG_SPLIT_NO_EMPTY
+            );
+            if(!count($sql) || !count($sql)%2)
+                return false;
+            // index 1,3,5... is the matched delim, index 2,4,6... the remaining string
+            $stmts = array();
+            for($i=0;$i<count($sql);$i++)
+                $stmts[] = $sql[$i] . $sql[++$i];
+            foreach ($stmts as $imp){
+                if ($imp != '' && $imp != ' '){
+                    $ret = $this->query($imp);
+                    if($this->isError())
+                        $errors[] = $this->getError();
+                }
+            }
+            if($errors)
+                $this->errors = $errors;
+            return ( count($errors) ? false : true );
+        }   // end function sqlImport()
+
+        /**
          * initialize database class:
          *
          * - load driver defaults
@@ -1206,11 +1261,12 @@ interface wbQuery_DriverInterface
          * @access public
          * @return array
          **/
-    	public function showTables()
+    	public function showTables($ignore_prefix=false)
         {
     	    $data   = $this->query('SHOW TABLES');
     	    $tables = array();
     		while( $result = $data->fetch() )
+                if($ignore_prefix || ! substr_compare($result[0],$this->prefix,0,strlen($this->prefix)))
          		$tables[] = $result[0];
     		return $tables;
     	}   // end function showTables()
@@ -1264,6 +1320,93 @@ interface wbQuery_DriverInterface
             }
             return NULL;
         }   // end function min()
+
+        /**
+         * allows to create an SQL dump of all tables
+         *
+         * by default, if 'prefix' is configured, only tables having this name
+         * prefix will be dumped; set $ignore_prefix to a true value to get a
+         * dump of all tables in the current connection
+         *
+         * @access public
+         * @param  boolean $ignore_prefix - default false
+         * @return string
+         **/
+        public function dumpAllTables($ignore_prefix=false) {
+            $tables = $this->showTables($ignore_prefix);
+            $output = '';
+            foreach($tables as $table)
+            {
+                $output .= self::dumpTable($table);
+            }
+            return $output;
+        }
+
+        /**
+         * create an SQL dump for the given table
+         *
+         * by default, structure and data are dumped; to get the structure only,
+         * set $structure to a true value
+         *
+         * @access public
+         * @param  string  $table          - table to dump
+         * @param  boolean $structure_only - default false
+         * @return string
+         **/
+        public function dumpTable( $table, $structure_only = false, $remove_prefix = false, $ignore = false ) {
+            $output   = array();
+            $fields   = "";
+            $sep2     = "";
+            $stmt     = $this->query("SHOW CREATE TABLE $table");
+            $row      = $stmt->fetch(\PDO::FETCH_NUM);
+
+            if($remove_prefix) //CREATE TABLE `wb_users` (
+                $row[1] = preg_replace('~`'.$this->prefix.'~i', '`', $row[1]);
+
+            $output[] = $row[1].";\n\n";
+
+            if(!$structure_only)
+            {
+                $stmt   = $this->query("SELECT * FROM $table");
+                $line   = '';
+                while($row = $stmt->fetch(\PDO::FETCH_OBJ)){
+                    // runs once per table - create the INSERT INTO clause
+                    if($fields == ""){
+                        $fields = "INSERT " . ( $ignore ? 'IGNORE ' : '' )
+                                . "INTO `" . ( $remove_prefix ? str_ireplace($this->prefix, '', $table) : $table ) . "` (";
+                        $sep    = "";
+                        // grab each field name
+                        foreach($row as $col => $val){
+                            $fields .= $sep . "`$col`";
+                            $sep     = ", ";
+                        }
+                        $fields .= ") VALUES";
+                        $line   .= $fields . "\n";
+                    }
+                    // grab table data
+                    $sep   = "";
+                    $line .= $sep2 . "(";
+                    foreach($row as $col => $val){
+                        // add slashes to field content
+                        $search  = array("\n", "\r");
+                        $replace = array("\\n", "\\r");
+                        $val     = str_replace($search, $replace, $val);
+                        $line   .= $sep . \PDO::quote($val);
+                        $sep     = ", ";
+                    }
+                    // terminate row data
+                    $line .= ")";
+                    $sep2  = ",\n";
+                }
+                if($line)
+                {
+                    // terminate insert data
+                    $line .= ";\n";
+                    $output[] = $line;
+                }
+            }
+            return implode("\n",$output);
+        }
 
     }   // ---------- end class MySQL ----------
 
