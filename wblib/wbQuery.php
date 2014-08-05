@@ -11,7 +11,7 @@
  *   @category     wblib2
  *   @package      wbQuery
  *   @author       BlackBird Webprogrammierung
- *   @copyright    (c) 2013 BlackBird Webprogrammierung
+ *   @copyright    (c) 2014 BlackBird Webprogrammierung
  *   @license      GNU LESSER GENERAL PUBLIC LICENSE Version 3
  *
  **/
@@ -23,7 +23,7 @@ namespace wblib;
  *
  * @category   wblib2
  * @package    wbQuery
- * @copyright  Copyright (c) 2013 BlackBird Webprogrammierung
+ * @copyright  Copyright (c) 2014 BlackBird Webprogrammierung
  * @license    GNU LESSER GENERAL PUBLIC LICENSE Version 3
  */
 if ( ! class_exists( 'wbQuery', false ) )
@@ -195,7 +195,7 @@ interface wbQuery_DriverInterface
  *
  * @category   wblib2
  * @package    wbQuery
- * @copyright  Copyright (c) 2013 BlackBird Webprogrammierung
+ * @copyright  Copyright (c) 2014 BlackBird Webprogrammierung
  * @license    GNU LESSER GENERAL PUBLIC LICENSE Version 3
  */
     class wbQuery_Driver extends \PDO

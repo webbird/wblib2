@@ -12,7 +12,7 @@
  *   @category     wblib2
  *   @package      wbForms
  *   @author       BlackBird Webprogrammierung
- *   @copyright    2013 BlackBird Webprogrammierung
+ *   @copyright    (c) 2014 BlackBird Webprogrammierung
  *
  *   This program is free software; you can redistribute it and/or modify
  *   it under the terms of the GNU Lesser General Public License as published by
@@ -39,7 +39,7 @@ if(!class_exists('wbFormsBase',false))
  *
  * @category   wblib2
  * @package    wbFormsWizard
- * @copyright  Copyright (c) 2013 BlackBird Webprogrammierung
+ * @copyright  Copyright (c) 2014 BlackBird Webprogrammierung
  * @license    GNU LESSER GENERAL PUBLIC LICENSE Version 3
  */
 if (!class_exists('wbFormsWizard',false))

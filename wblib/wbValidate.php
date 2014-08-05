@@ -11,7 +11,7 @@
  *   @category     wblib2
  *   @package      wbValidate
  *   @author       BlackBird Webprogrammierung
- *   @copyright    (c) 2013 BlackBird Webprogrammierung
+ *   @copyright    (c) 2014 BlackBird Webprogrammierung
  *   @license      GNU LESSER GENERAL PUBLIC LICENSE Version 3
  *
  **/
@@ -23,7 +23,7 @@ namespace wblib;
  *
  * @category   wblib2
  * @package    wbValidate
- * @copyright  Copyright (c) 2013 BlackBird Webprogrammierung
+ * @copyright  Copyright (c) 2014 BlackBird Webprogrammierung
  * @license    GNU LESSER GENERAL PUBLIC LICENSE Version 3
  */
 if ( ! class_exists( 'wbValidate', false ) )
@@ -270,7 +270,7 @@ if ( ! class_exists( 'wbValidate', false ) )
      *
      * @category   wblib2
      * @package    wbValidateValidate
-     * @copyright  Copyright (c) 2013 BlackBird Webprogrammierung
+     * @copyright  Copyright (c) 2014 BlackBird Webprogrammierung
      * @license    GNU LESSER GENERAL PUBLIC LICENSE Version 3
      */
     class wbValidateSanitize {

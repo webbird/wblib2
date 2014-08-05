@@ -48,7 +48,7 @@ function addOptions(elem,data,resetpreview)
 
 function addElement(id,fieldtype,label,options)
 {
-    //alert('passed options: id ['+id+'] type ['+fieldtype+'] label ['+label+'] options '+dump(options));
+//alert('passed options: id ['+id+'] type ['+fieldtype+'] label ['+label+'] options '+dump(options));
     // if no ID was passed, create one
     if(id.length == 0) {
         id = 'CTRL_'+(_ctrl_index++);
@@ -69,7 +69,7 @@ function addElement(id,fieldtype,label,options)
         label: label
     });
     // element has options (radiogroup, select)
-    if(options.length > 0) {
+    if(typeof options != 'undefined' && options.length > 0) {
         formElements[id].options = unserialize(options);
         addOptions(newelem,formElements[id],true);
     }

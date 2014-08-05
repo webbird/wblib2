@@ -12,7 +12,7 @@
  *   @category     wblib2
  *   @package      wbForms
  *   @author       BlackBird Webprogrammierung
- *   @copyright    2013 BlackBird Webprogrammierung
+ *   @copyright    (c) 2014 BlackBird Webprogrammierung
  *
  *   This program is free software; you can redistribute it and/or modify
  *   it under the terms of the GNU Lesser General Public License as published by
@@ -32,13 +32,13 @@
 namespace wblib;
 
 /**
-     * form builder base class
-     *
-     * @category   wblib2
-     * @package    wbFormsBase
-     * @copyright  Copyright (c) 2013 BlackBird Webprogrammierung
-     * @license    GNU LESSER GENERAL PUBLIC LICENSE Version 3
-     */
+ * form builder base class
+ *
+ * @category   wblib2
+ * @package    wbFormsBase
+ * @copyright  Copyright (c) 2014 BlackBird Webprogrammierung
+ * @license    GNU LESSER GENERAL PUBLIC LICENSE Version 3
+ */
 
 if (!class_exists('wblib\wbFormsBase',false))
 {
@@ -134,6 +134,7 @@ if (!class_exists('wblib\wbFormsBase',false))
          **/
         protected static $globals    = array(
             'add_breaks'      => true,
+            'add_buttons'     => true,
             'blank_span'      => '<span class="fbblank" style="display:inline-block;width:16px;">&nbsp;</span>',
             'enable_hints'    => true,
             'fallback_path'   => NULL,
@@ -455,6 +456,7 @@ if (!class_exists('wblib\wbFormsBase',false))
                        !$this instanceof wbFormsElementLabel
                     && !$this instanceof wbFormsElementLegend
                     && !$this instanceof wbFormsElementButton
+                    && !$this instanceof wbFormsElementInfo
                 ) {
                     $this->checkAttr();
                     $label = new wbFormsElementLabel(
@@ -523,23 +525,31 @@ if (!class_exists('wblib\wbFormsBase',false))
                                ;
                 }
             }
-            self::log('replace',7);
-            self::log(var_export($replace,1),7);
-            self::log('with',7);
-            self::log(var_export($with,1),7);
 
-            $output = str_ireplace(
-                $replace,
-                $with,
-                $output
-            );
-            self::log('template after replacing normal placeholders',7);
-            self::log($output,7);
+//echo "CLASS -$class- OUTPUT -", gettype($output), "-<br />";
+            if(!is_scalar($output))
+            {
+                self::log(sprintf('ERROR: $output is not a scalar! (class [%s])',$class),7);
+            }
+            else
+            {
+                self::log('-----> replace: '.var_export($replace,1),7);
+                self::log('-----> with   : '.var_export($with,1),7);
+                self::log('-----> in     : '.var_export($output,1),7);
 
-            // remove any placeholders not replaced yet
-            $output = preg_replace( '~%\w+%~', '', $output );
-            self::log('template after removing additional placeholders',7);
-            self::log($output,7);
+                $output = str_ireplace(
+                    $replace,
+                    $with,
+                    $output
+                );
+                self::log('template after replacing normal placeholders',7);
+                self::log($output,7);
+
+                // remove any placeholders not replaced yet
+                $output = preg_replace( '~%\w+%~', '', $output );
+                self::log('template after removing additional placeholders',7);
+                self::log($output,7);
+            }
 
             return $output
                 . (
@@ -597,7 +607,7 @@ if (!class_exists('wblib\wbFormsBase',false))
             $this->attr[$field] = self::t($value);
             self::log('< setValue()',7);
         }   // end function setValue()
-        
+
         /**
          *
          * @access public
@@ -617,12 +627,12 @@ if (!class_exists('wblib\wbFormsBase',false))
     }   // ----------    end class wbFormsBase    ----------
 }
 
-    /**
+/**
  * form builder class
  *
  * @category   wblib2
  * @package    wbForms
- * @copyright  Copyright (c) 2013 BlackBird Webprogrammierung
+ * @copyright  Copyright (c) 2014 BlackBird Webprogrammierung
  * @license    GNU LESSER GENERAL PUBLIC LICENSE Version 3
  */
 if (!class_exists('wblib\wbForms',false))
@@ -632,7 +642,7 @@ if (!class_exists('wblib\wbForms',false))
      *
      * @category   wblib2
      * @package    wbForms
-     * @copyright  Copyright (c) 2013 BlackBird Webprogrammierung
+     * @copyright  Copyright (c) 2014 BlackBird Webprogrammierung
      * @license    GNU LESSER GENERAL PUBLIC LICENSE Version 3
      */
     class wbForms extends wbFormsBase
@@ -749,7 +759,7 @@ if (!class_exists('wblib\wbForms',false))
          **/
         public static function configure($formname,$array)
         {
-            self::log('> configure()',7);
+            self::log(sprintf('> configure(%s)',$formname),7);
             self::log(var_export($array,1),7);
             self::$FORMS[$formname] = $array;
             self::log('< configure()',7);
@@ -891,57 +901,35 @@ if (!class_exists('wblib\wbForms',false))
          * @access public
          * @param  array   $elem
          * @param  string  $elem_name  - insert after 'name'
-         * @param  string  $where      - insert 'before' or 'after', default 'after'
+         * @param  string  $where      - insert 'before'|'after'|'top', default 'after'
+         * @param  string  $find_in    - 'ELEMENTS','FORMS'
          * @return void
          **/
-        public static function addElement($elem,$elem_name=NULL,$where='after')
+        public static function addElement($elem,$elem_name=NULL,$where='after',$find_in='ELEMENTS')
         {
             self::log('> addElement()',7);
 
-            $name    = self::current();
-            $element = NULL;
+            $name      = self::current();
+            $array_ref =& self::${$find_in};
+            $element   = NULL;
 
-            if(!isset($elem['name']))
-                $elem['name'] = wbFormsElement::generateName();
-            // always generate the names of honeypot fields!
-            if($elem['type']=='honeypot')
-                $elem['name'] = wbFormsElement::generateName(10,self::$globals['honeypot_prefix']);
-            if(!isset($elem['type']))
-                $elem['type'] = 'text';
-            if(!isset($elem['id']))
-                $elem['id'] = $elem['name'];
+            self::log(sprintf('current form: %s',$name),7);
+
+            // check for name etc.
+            self::checkAttributes($elem);
 
             // check if element exists
-            if(!self::hasElement($elem['name']))
+            if(!self::hasElement($elem['name'],$find_in))
             {
-                $i = -1;
-
-                // if $before or $after are set...
-                if($elem_name)
-                {
-                    // ...get insert position
-                    self::log(sprintf('searching for element [%s] to add [%s]',$elem_name,$where),7);
-                    $i    = self::hasElement($elem_name);
-                    self::log(sprintf('pos [%s]',$i),7);
-                    if($i)
-                        if($where=='after')
-                            $i++;
-                    else
-                        $i = -1;
-                }
-                else
-                {
-                    if($where=='before')
-                        $i = key(end(self::$ELEMENTS));
-                }
+                $i = self::getInsertPosition($where,$find_in,$elem_name);
 
                 self::log(sprintf('insert position [%s]',$i),7);
-                if(!isset(self::$ELEMENTS[$name]) || !is_array(self::$ELEMENTS[$name]))
-                    self::$ELEMENTS[$name] = array();
-                array_splice(self::$ELEMENTS[$name],$i,0,array($elem));
+                if(!isset($array_ref[$name]) || !is_array($array_ref[$name]))
+                    $array_ref[$name] = array();
+                //array_splice($array_ref[$name],$i,0,array($elem));
 
                 // 'create' element
-                if(isset($elem['type']))
+                if(isset($elem['type']) && $find_in == 'ELEMENTS')
                 {
                     self::log(sprintf('creating element of type [%s]',$elem['type']),7);
                     $classname = '\wblib\wbFormsElement'.ucfirst(strtolower($elem['type']));
@@ -951,20 +939,30 @@ if (!class_exists('wblib\wbForms',false))
                 }
 
                 if(!$element)
-                    $element =  wbFormsElement::get($elem);
-
-                if(!isset(self::$ELEMENTS[$name]) || !count(self::$ELEMENTS[$name]) || $i == -1)
                 {
-                    self::$ELEMENTS[$name][] = $element;
+                    if($find_in == 'ELEMENTS')
+                    {
+                        // create a placeholder, als array_splice does not work
+                        // with objects as replacement
+                        array_splice(self::$ELEMENTS[$name],$i,0,'EMPTY');
+                        $element =  wbFormsElement::get($elem);
+                    }
+                    else
+                    {
+                        $element = $elem;
+                    }
+                }
+
+                if(!isset($array_ref[$name]) || !count($array_ref[$name]) || $i == -1)
+                {
+                    self::log('adding at bottom',7);
+                    self::log(sprintf('array [%s] current count [%s] key [%s]',$find_in,count($array_ref[$name]),key($array_ref[$name])),7);
+                    array_push($array_ref[$name], $element);
                 }
                 else
                 {
-//echo "INSERTING AT OFFSET [$i], ELEMENT INDEX IS [$i]<br />";
-                    // create a placeholder, als array_splice does not work
-                    // with objects as replacement
-                    array_splice(self::$ELEMENTS[$name],$i,0,'EMPTY');
-                    // replace new index with element
-                    self::$ELEMENTS[$name][$i] = $element;
+                    self::log(sprintf('adding at position [%d]',$i),7);
+                    $array_ref[$name][$i] = $elem;
                 }
 
                 self::log('< addElement() (inside if)',7);
@@ -972,7 +970,54 @@ if (!class_exists('wblib\wbForms',false))
             }
             self::log('< addElement()',7);
         }   // end function addElement()
-        
+
+        /**
+         * add a form field; adds to self::$FORMS array
+         *
+         * @access public
+         * @param  array   $field      - field definition (like in inc.forms.php)
+         * @param  string  $field_name - insert after 'name'
+         * @param  string  $where      - insert 'before' or 'after', default 'after'
+         * @return void
+         * @return
+         **/
+        public static function addField($field,$field_name=NULL,$where='after')
+        {
+            self::log('> addField()',7);
+
+            $name    = self::current();
+            $element = NULL;
+
+            self::log(sprintf('current form: %s',$name),7);
+
+            // check for name etc.
+            self::checkAttributes($field);
+
+            if(!self::hasElement($field['name'],'FORMS'))
+            {
+                $i = -1;
+            }
+
+            self::log('< addField()',7);
+        }   // end function addField()
+
+        /**
+         *
+         * @access private
+         * @return
+         **/
+        private static function checkAttributes(&$elem)
+        {
+            if(!isset($elem['name']))
+                $elem['name'] = wbFormsElement::generateName();
+            // always generate the names of honeypot fields!
+            if($elem['type']=='honeypot')
+                $elem['name'] = wbFormsElement::generateName(10,self::$globals['honeypot_prefix']);
+            if(!isset($elem['type']))
+                $elem['type'] = 'text';
+            if(!isset($elem['id']))
+                $elem['id'] = $elem['name'];
+        }   // end function checkAttributes()
 
         /**
          *
@@ -1006,7 +1051,87 @@ if (!class_exists('wblib\wbForms',false))
                     $this->addElement(array('type'=>'honeypot'));
             self::log('< createHoneypots()',7);
         }   // end function createHoneypots()
-        
+
+        /**
+         * gets insert position for new element
+         *
+         * @access private
+         * @param  string  $where - 'before','after'
+         * @param  string  $ref   - array to reference ('ELEMENTS','FORMS')
+         * @param  string  $elem_name - optional
+         * @return
+         **/
+        private static function getInsertPosition($where,$ref,$elem_name=NULL)
+        {
+            self::log('> getInsertPosition()',7);
+            self::log(sprintf('where [%s] ref [%s] elem name [%s]',$where,$ref,$elem_name),7);
+            $i = self::getPosition($ref,$elem_name);
+            if($elem_name && $i)
+            {
+                if($where=='after')
+                    $i++;
+                if($where=='before')
+                    $i--;
+            }
+            else
+            {
+                $arr =& self::${$ref};
+                if($where=='before')
+                    $i = key(end($arr));
+                if($where=='top')
+                {
+                    $array_ref =& self::${$ref};
+                    $name      =  self::current();
+                    foreach($array_ref[$name] as $index => $item)
+                    {
+                        if(
+                               is_object($item)
+                            && !$this instanceof wbFormsElementLabel
+                            && !$this instanceof wbFormsElementLegend
+                            && !$this instanceof wbFormsElementButton
+                            && !$this instanceof wbFormsElementInfo
+                        ){
+                            $i = $index;
+                            break;
+                        }
+                        else
+                        {
+                            if(!in_array($item['type'],array('label','legend','button','info')))
+                            {
+                                $i = $index;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+            self::log(sprintf('insert position [%s]',$i),7);
+            self::log('< getInsertPosition()',7);
+            return $i;
+        }   // end function getInsertPosition()
+
+        /**
+         *
+         *
+         *
+         *
+         **/
+        private static function getPosition($ref,$elem_name=NULL)
+        {
+            self::log('> getPosition()',7);
+            self::log(sprintf('ref [%s] elem name [%s]',$ref,$elem_name),7);
+            $i = -1;
+            if($elem_name)
+            {
+                self::log(sprintf('searching for element [%s]',$elem_name),7);
+                $i    = self::hasElement($elem_name,$ref);
+                self::log(sprintf('pos [%s]',$i),7);
+            }
+            self::log(sprintf('position [%s]',$i),7);
+            self::log('< getPosition()',7);
+            return $i;
+        }   // end function getInsertPosition()
+
         /**
          * returns a list of available forms
          *
@@ -1018,7 +1143,7 @@ if (!class_exists('wblib\wbForms',false))
             $forms = array_keys(self::$FORMS);
             return $forms;
         }   // end function listForms()
-        
+
 
         /**
          * set attribute value(s)
@@ -1095,7 +1220,7 @@ if (!class_exists('wblib\wbForms',false))
                 );
             self::log('< setInfo()',7);
         }   // end function setInfo()
-        
+
         /**
          * loads the form elements; this allows to call printHeaders() to load
          * all the CSS and JS into the <head>
@@ -1130,6 +1255,32 @@ if (!class_exists('wblib\wbForms',false))
         }   // end function setForm()
 
         /**
+         * removes an element from $find_in, where $find_in is one of
+         * 'ELEMENTS' (default), 'FORMS'
+         *
+         * @access public
+         * @param  string  $elem_name  - element to remove
+         * @param  string  $find_in    - 'ELEMENTS','FORMS'
+         * @return void
+         **/
+        public static function removeElement($elem_name,$find_in='ELEMENTS')
+        {
+            self::log('> removeElement()',7);
+
+            $name      = self::current();
+            $array_ref =& self::${$find_in};
+
+            if(self::hasElement($elem_name,$find_in))
+            {
+                $index = self::getPosition($find_in,$elem_name);
+                self::log(sprintf('removing element [%s] from [%s] at position [%s]',$elem_name,$find_in,$index),7);
+                array_splice($array_ref[$name],$index,1);
+            }
+
+            self::log('< removeElement()',7);
+        }   // end function removeElement()
+
+        /**
          *
          * @access public
          * @return
@@ -1141,7 +1292,7 @@ if (!class_exists('wblib\wbForms',false))
                 wbFormsElementForm::reset($name);
             self::log('< resetForm()',7);
         }   // end function resetForm()
-        
+
         /***********************************************************************
          *    NON STATIC METHODS
          **********************************************************************/
@@ -1190,7 +1341,7 @@ if (!class_exists('wblib\wbForms',false))
             $elements[] = wbFormsElement::get(wbFormsProtect::getToken(self::$globals['token']))->render();
 
             // make sure we have a submit button
-            if(!self::hasButton())
+            if(!self::hasButton() && self::$globals['add_buttons'])
                 $elements[] = wbFormsElementSubmit::get(array('label'=>'Submit'))->render();
 
             self::log('< getForm()',7);
@@ -1224,6 +1375,26 @@ if (!class_exists('wblib\wbForms',false))
         }   // end function getHeaders()
 
         /**
+         * returns the validated form data
+         *
+         * @access public
+         * @param  boolean $always_return - returns valid data even if the form is not valid
+         * @param  boolean $get_empty     - retrieve empty values too; default: false
+         * @return array
+         **/
+        public static function getData($always_return=true,$get_empty=false)
+        {
+            self::log('> getData()',7);
+            $formname = self::current();
+            if(!isset(self::$FORMS[$formname]['__is_valid']))
+                self::isValid($get_empty); self::$FORMS[$formname]['__is_valid'] = false;
+            if(!self::$FORMS[$formname]['__is_valid']&&!$always_return)
+                return NULL;
+            return self::$DATA[$formname];
+            self::log('< getData()',7);
+        }   // end function getData()
+
+        /**
          *
          * @access public
          * @return
@@ -1239,7 +1410,7 @@ if (!class_exists('wblib\wbForms',false))
                 return $formname;
             self::log('< getDisplayname()',7);
         }   // end function getDisplayname()
-        
+
         /**
          * tries to find element $name in ELEMENTS array; returns the
          * element (object) on success, false otherwise
@@ -1268,33 +1439,34 @@ if (!class_exists('wblib\wbForms',false))
          * @access public
          * @return
          **/
-        public static function getElements($ignore_hidden=false,$ignore_labels=false)
+        public static function getElements($ignore_hidden=false,$ignore_labels=false,$find_in='ELEMENTS')
         {
             self::log('> getElements()',7);
-            $formname = self::current();
-            if(isset(self::$FORMS[$formname]) && count(self::$FORMS[$formname]))
+            $formname  = self::current();
+            $array_ref =& self::${$find_in};
+            if(isset($array_ref[$formname]) && count($array_ref[$formname]))
             {
                 if($ignore_hidden || $ignore_labels)
                 {
                     $elem = array();
-                    foreach(self::$FORMS[$formname] as $item)
+                    foreach($array_ref[$formname] as $item)
                     {
-                        if($ignore_hidden && $item['type'] == 'hidden')
+                        if($ignore_hidden && ( is_array($item) && $item['type'] == 'hidden') || (is_object($item) && $item->attr['type'] == 'hidden') )
                             continue;
-                        if($ignore_labels && $item['type'] == 'legend')
+                        if($ignore_labels && ( is_array($item) && $item['type'] == 'legend') || (is_object($item) && $item->attr['type'] == 'legend') )
                             continue;
                         $elem[] = $item;
                     }
                     self::log(sprintf('< getElements() - [%s] elements returned (filtered)',count($elem)),7);
                     return $elem;
                 }
-                self::log(sprintf('< getElements() - [%s] elements returned',count(self::$FORMS[$formname])),7);
-                return self::$FORMS[$formname];
+                self::log(sprintf('< getElements() - [%s] elements returned',count($array_ref[$formname])),7);
+                return $array_ref[$formname];
             }
             self::log('< getElements() - no elements',7);
             return false;
         }   // end function getElements()
-        
+
 
         /**
          *
@@ -1309,24 +1481,15 @@ echo "</textarea>";
         }   // end function getErrors()
 
         /**
-         * returns the validated form data
          *
          * @access public
-         * @param  boolean $always_return - returns valid data even if the form is not valid
-         * @param  boolean $get_empty     - retrieve empty values too; default: false
-         * @return array
+         * @return
          **/
-        public static function getData($always_return=true,$get_empty=false)
+        public static function getFields()
         {
-            self::log('> getData()',7);
-            $formname = self::current();
-            if(!isset(self::$FORMS[$formname]['__is_valid']))
-                self::isValid($get_empty); self::$FORMS[$formname]['__is_valid'] = false;
-            if(!self::$FORMS[$formname]['__is_valid']&&!$always_return)
-                return NULL;
-            return self::$DATA[$formname];
-            self::log('< getData()',7);
-        }   // end function getData()
+        
+        }   // end function getFields()
+        
 
         /**
          * check if the current form has at least one button of the given type
@@ -1358,28 +1521,48 @@ echo "</textarea>";
         }   // end function hasButton()
 
         /**
+         * checks if an element with given $name is already defined; searches
+         * in ELEMENTS array by default, set $find_in to 'FORMS' to search
+         * in fields array
          *
          * @access public
+         * @param  string  $name
+         * @param  string  $find_in
          * @return
          **/
-        public static function hasElement($name)
+        public static function hasElement($name,$find_in='ELEMENTS')
         {
             self::log('> hasElement()',7);
-            $formname = self::current();
-            self::log(sprintf('hasElement() - checking for element [%s] in form [%s]',$name,$formname),7);
-            if(isset(self::$ELEMENTS[$formname]) && count(self::$ELEMENTS[$formname]))
+            $formname  = self::current();
+            $array_ref =& self::${$find_in};
+            self::log(sprintf('hasElement() - checking for element [%s] in form [%s], array [%s]',$name,$formname,$find_in),7);
+            if(isset($array_ref[$formname]) && count($array_ref[$formname]))
             {
-                foreach(self::$ELEMENTS[$formname] as $index => $elem)
+                foreach($array_ref[$formname] as $index => $elem)
                 {
-                    if(!is_object($elem)) continue;
-                    self::log(sprintf('current element [%s]',$elem->attr['id']),7);
-                    if(
-                           ( isset($elem->attr['id'])   && $elem->attr['id']   == $name )
-                        || ( isset($elem->attr['name']) && $elem->attr['name'] == $name )
-                    ) {
-                        self::log(sprintf('found at index [%d]',$index),7);
-                        self::log('< hasElement() (inside if)',7);
-                        return $index;
+                    if($find_in=='ELEMENTS' && !is_object($elem)) continue;
+                    if($find_in=='ELEMENTS')
+                    {
+                        self::log(sprintf('current element [%s]',$elem->attr['id']),7);
+                        if(
+                               ( isset($elem->attr['id'])   && $elem->attr['id']   == $name )
+                            || ( isset($elem->attr['name']) && $elem->attr['name'] == $name )
+                        ) {
+                            self::log(sprintf('found at index [%d]',$index),7);
+                            self::log('< hasElement() (inside if)',7);
+                            return $index;
+                        }
+                    }
+                    else
+                    {
+                        if(
+                               ( isset($elem['name'])   && $elem['name']   == $name )
+                        ) {
+                            self::log(sprintf('current element [%s]',$elem['name']),7);
+                            self::log(sprintf('found at index [%d]',$index),7);
+                            self::log('< hasElement() (inside if)',7);
+                            return $index;
+                        }
                     }
                 }
             }
@@ -1623,7 +1806,7 @@ echo "</textarea>";
             }
             self::log('< validateForm()',7);
         }   // end function validateForm()
-        
+
         /**
          *
          * @access public
@@ -1642,7 +1825,7 @@ echo "</textarea>";
      *
      * @category   wblib2
      * @package    wbFormsElement
-     * @copyright  Copyright (c) 2013 BlackBird Webprogrammierung
+     * @copyright  Copyright (c) 2014 BlackBird Webprogrammierung
      * @license    GNU LESSER GENERAL PUBLIC LICENSE Version 3
      */
     class wbFormsElement extends wbFormsBase
@@ -1721,9 +1904,18 @@ echo "</textarea>";
          **/
         public function checkAttr()
         {
+            if(
+                   $this instanceof wbFormsElementRadiogroup
+                || $this instanceof wbFormsElementCheckboxgroup
+//                || $this instanceof wbFormsElementSelect
+//                || $this instanceof wbFormsElementImageselect
+            ) {
+                if(!isset($this->attr['options']) || !is_array($this->attr['options']))
+                    $this->attr['options'] = array();
+            }
             if(isset($this->attr['required']) && $this->attr['required'] !== false)
             {
-                if(!isset($this->attr['is_group']) || !$this->attr['is_group'])
+                #if(!isset($this->attr['is_group']) || !$this->attr['is_group'])
                     $this->attr['is_required'] = sprintf(self::$globals['required_span'],self::t('This item is required'));
                 $this->attr['required'] = 'required'; // valid XHTML
             }
@@ -1764,7 +1956,7 @@ echo "</textarea>";
      *
      * @category   wblib2
      * @package    wbFormsElementForm
-     * @copyright  Copyright (c) 2013 BlackBird Webprogrammierung
+     * @copyright  Copyright (c) 2014 BlackBird Webprogrammierung
      * @license    GNU LESSER GENERAL PUBLIC LICENSE Version 3
      */
     class wbFormsElementForm extends wbFormsElement
@@ -1855,7 +2047,7 @@ echo "</textarea>";
         {
             unset(self::$instances[$name]);
         }   // end function reset()
-        
+
 
     }   // ----------   end class wbFormsElementForm  ----------
 
@@ -1868,7 +2060,7 @@ echo "</textarea>";
      *
      * @category   wblib2
      * @package    wbFormsElementLabel
-     * @copyright  Copyright (c) 2013 BlackBird Webprogrammierung
+     * @copyright  Copyright (c) 2014 BlackBird Webprogrammierung
      * @license    GNU LESSER GENERAL PUBLIC LICENSE Version 3
      */
     class wbFormsElementInfo extends wbFormsElement
@@ -1891,7 +2083,7 @@ echo "</textarea>";
      *
      * @category   wblib2
      * @package    wbFormsElementFieldset
-     * @copyright  Copyright (c) 2013 BlackBird Webprogrammierung
+     * @copyright  Copyright (c) 2014 BlackBird Webprogrammierung
      * @license    GNU LESSER GENERAL PUBLIC LICENSE Version 3
      */
     class wbFormsElementFieldset extends wbFormsElement
@@ -1943,7 +2135,7 @@ echo "</textarea>";
      *
      * @category   wblib2
      * @package    wbFormsElementLegend
-     * @copyright  Copyright (c) 2013 BlackBird Webprogrammierung
+     * @copyright  Copyright (c) 2014 BlackBird Webprogrammierung
      * @license    GNU LESSER GENERAL PUBLIC LICENSE Version 3
      */
     class wbFormsElementLegend extends wbFormsElement
@@ -1974,7 +2166,7 @@ echo "</textarea>";
      *
      * @category   wblib2
      * @package    wbFormsElementLabel
-     * @copyright  Copyright (c) 2013 BlackBird Webprogrammierung
+     * @copyright  Copyright (c) 2014 BlackBird Webprogrammierung
      * @license    GNU LESSER GENERAL PUBLIC LICENSE Version 3
      */
     class wbFormsElementLabel extends wbFormsElement
@@ -2015,7 +2207,7 @@ echo "</textarea>";
      *
      * @category   wblib2
      * @package    wbFormsElementSelect
-     * @copyright  Copyright (c) 2013 BlackBird Webprogrammierung
+     * @copyright  Copyright (c) 2014 BlackBird Webprogrammierung
      * @license    GNU LESSER GENERAL PUBLIC LICENSE Version 3
      */
     class wbFormsElementSelect extends wbFormsElement
@@ -2055,12 +2247,11 @@ echo "</textarea>";
             if(count($this->attr['options']))
                 if($isIndexed)
                     foreach($this->attr['options'] as $item)
-                        $options[] = '<option value="'.$item.'" '.( isset($sel[$item]) ? $sel[$item] : '' ).'>'.$item.'</option>'."\n";
+                        $options[] = '<option value="'.$item.'" '.( isset($sel[$item]) ? $sel[$item] : '' ).'>'.$this->t($item).'</option>'."\n";
                 else
                     foreach($this->attr['options'] as $value => $item)
-                        $options[] = '<option value="'.$value.'" '.( isset($sel[$value]) ? $sel[$value] : '' ).'>'.$item.'</option>'."\n";
+                        $options[] = '<option value="'.$value.'" '.( isset($sel[$value]) ? $sel[$value] : '' ).'>'.$this->t($item).'</option>'."\n";
             $this->attr['options'] = implode('',$options);
-            //wbFormsJQuery::attach($this->attr['id'],'select2',"width:'250px'");
             return $this->replaceAttr();
         }   // end function render()
         /**
@@ -2075,11 +2266,289 @@ echo "</textarea>";
     }   // ---------- end class wbFormsElementSelect ----------
 
     /**
+     * form builder select country class
+     *
+     * @category   wblib2
+     * @package    wbFormsElementCountryselect
+     * @copyright  Copyright (c) 2014 BlackBird Webprogrammierung
+     * @license    GNU LESSER GENERAL PUBLIC LICENSE Version 3
+     */
+    class wbFormsElementCountryselect extends wbFormsElementSelect
+    {
+        // created:
+        // http://www.countries-list.info/Download-List
+        protected static $countryList = array(
+        	"AF" => "Afghanistan",
+        	"AX" => "Alandinseln",
+        	"AL" => "Albanien",
+        	"DZ" => "Algerien",
+        	"UM" => "Amerikanisch-Ozeanien",
+        	"AS" => "Amerikanisch-Samoa",
+        	"VI" => "Amerikanische Jungferninseln",
+        	"AD" => "Andorra",
+        	"AO" => "Angola",
+        	"AI" => "Anguilla",
+        	"AQ" => "Antarktis",
+        	"AG" => "Antigua und Barbuda",
+        	"AR" => "Argentinien",
+        	"AM" => "Armenien",
+        	"AW" => "Aruba",
+        	"AZ" => "Aserbaidschan",
+        	"AU" => "Australien",
+        	"BS" => "Bahamas",
+        	"BH" => "Bahrain",
+        	"BD" => "Bangladesch",
+        	"BB" => "Barbados",
+        	"BY" => "Belarus",
+        	"BE" => "Belgien",
+        	"BZ" => "Belize",
+        	"BJ" => "Benin",
+        	"BM" => "Bermuda",
+        	"BT" => "Bhutan",
+        	"BO" => "Bolivien",
+        	"BA" => "Bosnien und Herzegowina",
+        	"BW" => "Botsuana",
+        	"BV" => "Bouvetinsel",
+        	"BR" => "Brasilien",
+        	"VG" => "Britische Jungferninseln",
+        	"IO" => "Britisches Territorium im Indischen Ozean",
+        	"BN" => "Brunei Darussalam",
+        	"BG" => "Bulgarien",
+        	"BF" => "Burkina Faso",
+        	"BI" => "Burundi",
+        	"CL" => "Chile",
+        	"CN" => "China",
+        	"CK" => "Cookinseln",
+        	"CR" => "Costa Rica",
+        	"CI" => "Côte d’Ivoire",
+        	"CD" => "Demokratische Republik Kongo",
+        	"KP" => "Demokratische Volksrepublik Korea",
+        	"DE" => "Deutschland",
+        	"DM" => "Dominica",
+        	"DO" => "Dominikanische Republik",
+        	"DJ" => "Dschibuti",
+        	"DK" => "Dänemark",
+        	"EC" => "Ecuador",
+        	"SV" => "El Salvador",
+        	"ER" => "Eritrea",
+        	"EE" => "Estland",
+        	"FK" => "Falklandinseln",
+        	"FJ" => "Fidschi",
+        	"FI" => "Finnland",
+        	"FR" => "Frankreich",
+        	"GF" => "Französisch-Guayana",
+        	"PF" => "Französisch-Polynesien",
+        	"TF" => "Französische Süd- und Antarktisgebiete",
+        	"FO" => "Färöer",
+        	"GA" => "Gabun",
+        	"GM" => "Gambia",
+        	"GE" => "Georgien",
+        	"GH" => "Ghana",
+        	"GI" => "Gibraltar",
+        	"GD" => "Grenada",
+        	"GR" => "Griechenland",
+        	"GL" => "Grönland",
+        	"GP" => "Guadeloupe",
+        	"GU" => "Guam",
+        	"GT" => "Guatemala",
+        	"GG" => "Guernsey",
+        	"GN" => "Guinea",
+        	"GW" => "Guinea-Bissau",
+        	"GY" => "Guyana",
+        	"HT" => "Haiti",
+        	"HM" => "Heard- und McDonald-Inseln",
+        	"HN" => "Honduras",
+        	"IN" => "Indien",
+        	"ID" => "Indonesien",
+        	"IQ" => "Irak",
+        	"IR" => "Iran",
+        	"IE" => "Irland",
+        	"IS" => "Island",
+        	"IM" => "Isle of Man",
+        	"IL" => "Israel",
+        	"IT" => "Italien",
+        	"JM" => "Jamaika",
+        	"JP" => "Japan",
+        	"YE" => "Jemen",
+        	"JE" => "Jersey",
+        	"JO" => "Jordanien",
+        	"KY" => "Kaimaninseln",
+        	"KH" => "Kambodscha",
+        	"CM" => "Kamerun",
+        	"CA" => "Kanada",
+        	"CV" => "Kap Verde",
+        	"KZ" => "Kasachstan",
+        	"QA" => "Katar",
+        	"KE" => "Kenia",
+        	"KG" => "Kirgisistan",
+        	"KI" => "Kiribati",
+        	"CC" => "Kokosinseln",
+        	"CO" => "Kolumbien",
+        	"KM" => "Komoren",
+        	"CG" => "Kongo",
+        	"HR" => "Kroatien",
+        	"CU" => "Kuba",
+        	"KW" => "Kuwait",
+        	"LA" => "Laos",
+        	"LS" => "Lesotho",
+        	"LV" => "Lettland",
+        	"LB" => "Libanon",
+        	"LR" => "Liberia",
+        	"LY" => "Libyen",
+        	"LI" => "Liechtenstein",
+        	"LT" => "Litauen",
+        	"LU" => "Luxemburg",
+        	"MG" => "Madagaskar",
+        	"MW" => "Malawi",
+        	"MY" => "Malaysia",
+        	"MV" => "Malediven",
+        	"ML" => "Mali",
+        	"MT" => "Malta",
+        	"MA" => "Marokko",
+        	"MH" => "Marshallinseln",
+        	"MQ" => "Martinique",
+        	"MR" => "Mauretanien",
+        	"MU" => "Mauritius",
+        	"YT" => "Mayotte",
+        	"MK" => "Mazedonien",
+        	"MX" => "Mexiko",
+        	"FM" => "Mikronesien",
+        	"MC" => "Monaco",
+        	"MN" => "Mongolei",
+        	"ME" => "Montenegro",
+        	"MS" => "Montserrat",
+        	"MZ" => "Mosambik",
+        	"MM" => "Myanmar",
+        	"NA" => "Namibia",
+        	"NR" => "Nauru",
+        	"NP" => "Nepal",
+        	"NC" => "Neukaledonien",
+        	"NZ" => "Neuseeland",
+        	"NI" => "Nicaragua",
+        	"NL" => "Niederlande",
+        	"AN" => "Niederländische Antillen",
+        	"NE" => "Niger",
+        	"NG" => "Nigeria",
+        	"NU" => "Niue",
+        	"NF" => "Norfolkinsel",
+        	"NO" => "Norwegen",
+        	"MP" => "Nördliche Marianen",
+        	"OM" => "Oman",
+        	"TL" => "Osttimor",
+        	"PK" => "Pakistan",
+        	"PW" => "Palau",
+        	"PS" => "Palästinensische Gebiete",
+        	"PA" => "Panama",
+        	"PG" => "Papua-Neuguinea",
+        	"PY" => "Paraguay",
+        	"PE" => "Peru",
+        	"PH" => "Philippinen",
+        	"PN" => "Pitcairn",
+        	"PL" => "Polen",
+        	"PT" => "Portugal",
+        	"PR" => "Puerto Rico",
+        	"KR" => "Republik Korea",
+        	"MD" => "Republik Moldau",
+        	"RW" => "Ruanda",
+        	"RO" => "Rumänien",
+        	"RU" => "Russische Föderation",
+        	"RE" => "Réunion",
+        	"SB" => "Salomonen",
+        	"ZM" => "Sambia",
+        	"WS" => "Samoa",
+        	"SM" => "San Marino",
+        	"SA" => "Saudi-Arabien",
+        	"SE" => "Schweden",
+        	"CH" => "Schweiz",
+        	"SN" => "Senegal",
+        	"RS" => "Serbien",
+        	"CS" => "Serbien und Montenegro",
+        	"SC" => "Seychellen",
+        	"SL" => "Sierra Leone",
+        	"ZW" => "Simbabwe",
+        	"SG" => "Singapur",
+        	"SK" => "Slowakei",
+        	"SI" => "Slowenien",
+        	"SO" => "Somalia",
+        	"HK" => "Sonderverwaltungszone Hongkong",
+        	"MO" => "Sonderverwaltungszone Macao",
+        	"ES" => "Spanien",
+        	"LK" => "Sri Lanka",
+        	"BL" => "St. Barthélemy",
+        	"SH" => "St. Helena",
+        	"KN" => "St. Kitts und Nevis",
+        	"LC" => "St. Lucia",
+        	"MF" => "St. Martin",
+        	"PM" => "St. Pierre und Miquelon",
+        	"VC" => "St. Vincent und die Grenadinen",
+        	"SD" => "Sudan",
+        	"SR" => "Suriname",
+        	"SJ" => "Svalbard und Jan Mayen",
+        	"SZ" => "Swasiland",
+        	"SY" => "Syrien",
+        	"ST" => "São Tomé und Príncipe",
+        	"ZA" => "Südafrika",
+        	"GS" => "Südgeorgien und die Südlichen Sandwichinseln",
+        	"TJ" => "Tadschikistan",
+        	"TW" => "Taiwan",
+        	"TZ" => "Tansania",
+        	"TH" => "Thailand",
+        	"TG" => "Togo",
+        	"TK" => "Tokelau",
+        	"TO" => "Tonga",
+        	"TT" => "Trinidad und Tobago",
+        	"TD" => "Tschad",
+        	"CZ" => "Tschechische Republik",
+        	"TN" => "Tunesien",
+        	"TM" => "Turkmenistan",
+        	"TC" => "Turks- und Caicosinseln",
+        	"TV" => "Tuvalu",
+        	"TR" => "Türkei",
+        	"UG" => "Uganda",
+        	"UA" => "Ukraine",
+        	"ZZ" => "Unbekannte oder ungültige Region",
+        	"HU" => "Ungarn",
+        	"UY" => "Uruguay",
+        	"UZ" => "Usbekistan",
+        	"VU" => "Vanuatu",
+        	"VA" => "Vatikanstadt",
+        	"VE" => "Venezuela",
+        	"AE" => "Vereinigte Arabische Emirate",
+        	"US" => "Vereinigte Staaten",
+        	"GB" => "Vereinigtes Königreich",
+        	"VN" => "Vietnam",
+        	"WF" => "Wallis und Futuna",
+        	"CX" => "Weihnachtsinsel",
+        	"EH" => "Westsahara",
+        	"CF" => "Zentralafrikanische Republik",
+        	"CY" => "Zypern",
+        	"EG" => "Ägypten",
+        	"GQ" => "Äquatorialguinea",
+        	"ET" => "Äthiopien",
+        	"AT" => "Österreich",
+        );
+
+
+       /**
+         *
+         * @access public
+         * @return
+         **/
+        public function render()
+        {
+            if(!isset($this->attr['options']))
+                $this->attr['options'] = self::$countryList;
+            $this->checkAttr();
+            return parent::render();
+        }   // end function init()
+    }
+
+    /**
      * form builder select element class
      *
      * @category   wblib2
      * @package    wbFormsElementSelect
-     * @copyright  Copyright (c) 2013 BlackBird Webprogrammierung
+     * @copyright  Copyright (c) 2014 BlackBird Webprogrammierung
      * @license    GNU LESSER GENERAL PUBLIC LICENSE Version 3
      */
     class wbFormsElementImageselect extends wbFormsElementSelect
@@ -2095,7 +2564,7 @@ echo "</textarea>";
 //            wbFormsJQuery::attach($this->attr['id'],'imagepicker');
             return parent::render();
         }   // end function init()
-        
+
     }
 
     /**
@@ -2103,7 +2572,7 @@ echo "</textarea>";
      *
      * @category   wblib2
      * @package    wbFormsElementTextarea
-     * @copyright  Copyright (c) 2013 BlackBird Webprogrammierung
+     * @copyright  Copyright (c) 2014 BlackBird Webprogrammierung
      * @license    GNU LESSER GENERAL PUBLIC LICENSE Version 3
      */
     class wbFormsElementTextarea extends wbFormsElement
@@ -2127,7 +2596,7 @@ echo "</textarea>";
      *
      * @category   wblib2
      * @package    wbFormsElementRadio
-     * @copyright  Copyright (c) 2013 BlackBird Webprogrammierung
+     * @copyright  Copyright (c) 2014 BlackBird Webprogrammierung
      * @license    GNU LESSER GENERAL PUBLIC LICENSE Version 3
      */
     class wbFormsElementRadio extends wbFormsElement
@@ -2165,7 +2634,7 @@ echo "</textarea>";
      *
      * @category   wblib2
      * @package    wbFormsElementCheckbox
-     * @copyright  Copyright (c) 2013 BlackBird Webprogrammierung
+     * @copyright  Copyright (c) 2014 BlackBird Webprogrammierung
      * @license    GNU LESSER GENERAL PUBLIC LICENSE Version 3
      */
     class wbFormsElementCheckbox extends wbFormsElement
@@ -2214,7 +2683,7 @@ echo "</textarea>";
      *
      * @category   wblib2
      * @package    wbFormsElementButton
-     * @copyright  Copyright (c) 2013 BlackBird Webprogrammierung
+     * @copyright  Copyright (c) 2014 BlackBird Webprogrammierung
      * @license    GNU LESSER GENERAL PUBLIC LICENSE Version 3
      */
     class wbFormsElementButton extends wbFormsElement
@@ -2231,7 +2700,7 @@ echo "</textarea>";
      *
      * @category   wblib2
      * @package    wbFormsElementButton
-     * @copyright  Copyright (c) 2013 BlackBird Webprogrammierung
+     * @copyright  Copyright (c) 2014 BlackBird Webprogrammierung
      * @license    GNU LESSER GENERAL PUBLIC LICENSE Version 3
      */
     class wbFormsElementReset extends wbFormsElementButton
@@ -2248,7 +2717,7 @@ echo "</textarea>";
      *
      * @category   wblib2
      * @package    wbFormsElementButton
-     * @copyright  Copyright (c) 2013 BlackBird Webprogrammierung
+     * @copyright  Copyright (c) 2014 BlackBird Webprogrammierung
      * @license    GNU LESSER GENERAL PUBLIC LICENSE Version 3
      */
     class wbFormsElementSubmit extends wbFormsElementButton
@@ -2268,7 +2737,7 @@ echo "</textarea>";
      *
      * @category   wblib2
      * @package    wbFormsElementRadioGroup
-     * @copyright  Copyright (c) 2013 BlackBird Webprogrammierung
+     * @copyright  Copyright (c) 2014 BlackBird Webprogrammierung
      * @license    GNU LESSER GENERAL PUBLIC LICENSE Version 3
      */
     class wbFormsElementRadiogroup extends wbFormsElement
@@ -2342,7 +2811,7 @@ echo "</textarea>";
      *
      * @category   wblib2
      * @package    wbFormsElementCheckboxgroup
-     * @copyright  Copyright (c) 2013 BlackBird Webprogrammierung
+     * @copyright  Copyright (c) 2014 BlackBird Webprogrammierung
      * @license    GNU LESSER GENERAL PUBLIC LICENSE Version 3
      */
     class wbFormsElementCheckboxgroup extends wbFormsElementRadiogroup
@@ -2362,7 +2831,7 @@ echo "</textarea>";
      *
      * @category   wblib2
      * @package    wbFormsElementHoneypot
-     * @copyright  Copyright (c) 2013 BlackBird Webprogrammierung
+     * @copyright  Copyright (c) 2014 BlackBird Webprogrammierung
      * @license    GNU LESSER GENERAL PUBLIC LICENSE Version 3
      */
     class wbFormsElementHoneypot extends wbFormsElement
@@ -2400,7 +2869,7 @@ echo "</textarea>";
      *
      * @category   wblib2
      * @package    wbFormsElementDate
-     * @copyright  Copyright (c) 2013 BlackBird Webprogrammierung
+     * @copyright  Copyright (c) 2014 BlackBird Webprogrammierung
      * @license    GNU LESSER GENERAL PUBLIC LICENSE Version 3
      */
     class wbFormsElementDate extends wbFormsElement
@@ -2419,7 +2888,7 @@ echo "</textarea>";
      *
      * @category   wblib2
      * @package    wbFormsElementWysiwyg
-     * @copyright  Copyright (c) 2013 BlackBird Webprogrammierung
+     * @copyright  Copyright (c) 2014 BlackBird Webprogrammierung
      * @license    GNU LESSER GENERAL PUBLIC LICENSE Version 3
      */
     class wbFormsElementWysiwyg extends wbFormsElementTextarea
@@ -2450,7 +2919,7 @@ echo "</textarea>";
      *
      * @category   wblib2
      * @package    wbFormsJQuery
-     * @copyright  Copyright (c) 2013 BlackBird Webprogrammierung
+     * @copyright  Copyright (c) 2014 BlackBird Webprogrammierung
      * @license    GNU LESSER GENERAL PUBLIC LICENSE Version 3
      */
     class wbFormsJQuery extends wbFormsBase
@@ -2500,7 +2969,7 @@ echo "</textarea>";
          * globals for jQuery config
          **/
         protected static $globals           = array(
-            'core_cdn' => 'https://ajax.googleapis.com/ajax/libs/jquery/2.0.3/jquery.min.js',
+            'core_cdn' => 'https://ajax.googleapis.com/ajax/libs/jquery/2/jquery.min.js',
             'ui_cdn'   => 'https://ajax.googleapis.com/ajax/libs/jqueryui/1/jquery-ui.min.js',
             'ui_css'   => 'https://ajax.googleapis.com/ajax/libs/jqueryui/1.10.3/themes/%s/jquery-ui.min.css',
             'ui_theme' => 'sunny',
@@ -2576,7 +3045,7 @@ echo "</textarea>";
             );
             self::log('< jQuery::attach()',7);
         }   // end function attach()
-        
+
         /**
          *
          * @access public
@@ -2749,7 +3218,7 @@ echo "</textarea>";
      *
      * @category   wblib2
      * @package    wbFormsProtect
-     * @copyright  Copyright (c) 2013 BlackBird Webprogrammierung
+     * @copyright  Copyright (c) 2014 BlackBird Webprogrammierung
      * @license    GNU LESSER GENERAL PUBLIC LICENSE Version 3
      */
     class wbFormsProtect extends wbFormsBase {
@@ -2775,7 +3244,7 @@ echo "</textarea>";
                 $var = filter_var($var, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
             return filter_var($var,FILTER_VALIDATE_BOOLEAN,FILTER_NULL_ON_FAILURE);
         }   // end function check_boolean()
-        
+
         public static function check_email($var)
         {
             return filter_var($var,FILTER_VALIDATE_EMAIL);
@@ -2830,7 +3299,7 @@ echo "</textarea>";
             else
                 return in_array($incoming,array_keys($allowed));
         }   // end function check_array()
-        
+
 
         /**
          *
@@ -2885,7 +3354,7 @@ echo "</textarea>";
 				return true;
 			}
         }   // end function checkToken()
-        
+
 
         /**
          *
@@ -3009,7 +3478,7 @@ echo "</textarea>";
 	        }
 	        if ( $strict ) { die; }
 		}   // end function terminateSession()
-        
+
     }   // ---------- end class wbFormsProtect() ----------
 
     /**
@@ -3018,7 +3487,7 @@ echo "</textarea>";
      *
      * @category   wblib2
      * @package    wbFormsException
-     * @copyright  Copyright (c) 2013 BlackBird Webprogrammierung
+     * @copyright  Copyright (c) 2014 BlackBird Webprogrammierung
      * @license    GNU LESSER GENERAL PUBLIC LICENSE Version 3
      */
     class wbFormsException extends \Exception {

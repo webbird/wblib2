@@ -13,7 +13,7 @@
  *   @category     wblib
  *   @package      wbLang
  *   @author       BlackBird Webprogrammierung
- *   @copyright    (c) 2013 BlackBird Webprogrammierung
+ *   @copyright    (c) 2014 BlackBird Webprogrammierung
  *   @license      GNU LESSER GENERAL PUBLIC LICENSE Version 3
  *
  **/
@@ -25,7 +25,7 @@ namespace wblib;
  *
  * @category   wblib
  * @package    wbLang
- * @copyright  Copyright (c) 2013 BlackBird Webprogrammierung
+ * @copyright  Copyright (c) 2014 BlackBird Webprogrammierung
  * @license    GNU LESSER GENERAL PUBLIC LICENSE Version 3
  */
 if ( ! class_exists( 'wbLang', false ) )
@@ -404,19 +404,27 @@ if ( ! class_exists( 'wbLang', false ) )
          **/
         public static function checkFile( $file, $check_var, $check_only = false )
         {
+            self::log('> checkFile()',7);
+            if(!isset(self::$_loaded[$file]) || self::$_loaded[$file]!=1)
+            {
             try
             {
                 // require the language file
-                @require( $file );
+                    @require $file ;
                 // check if the var is defined now
                 if ( isset( ${$check_var} ) )
                 {
+                        self::log(sprintf('require passed, [%s] is set',$check_var),7);
                     $isIndexed = array_values( ${$check_var} ) === ${$check_var};
                     if ( $isIndexed )
+                        {
+                            self::log('< checkFile() (isIndexed)',7);
                         return false;
+                        }
 
                     if ( $check_only )
                     {
+                            self::log('< checkFile() (check_only)',7);
                         return ${$check_var};
                     }
                     else
@@ -426,19 +434,26 @@ if ( ! class_exists( 'wbLang', false ) )
                         if ( preg_match( "/(\w+)\.php/", $file, $matches ) )
                             self::$_current = $matches[1];
                         self::$_loaded[$file] = 1;
-                        self::log(sprintf('loaded language file [%s]',$file),7);
+                            self::log(sprintf('loaded language file [%s], [%d] strings added',$file,count(${$check_var})),7);
                         return true;
                     }
                 }
                 else
                 {
                     self::log(sprintf('invalid lang file [%s]',$file),2);
+                        self::log('< checkFile()',7);
                     return false;
                 }
             }
             catch( wbLangException $e )
             {
             }
+            }
+            else
+            {
+                self::log('< checkFile() (already loaded)',7);
+            }
+            self::log('< checkFile()',7);
         }   // end function checkFile()
 
     	/**

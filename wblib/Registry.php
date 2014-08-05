@@ -13,7 +13,7 @@
  *   @category     wblib
  *   @package      Registry
  *   @author       BlackBird Webprogrammierung
- *   @copyright    (c) 2013 BlackBird Webprogrammierung
+ *   @copyright    (c) 2014 BlackBird Webprogrammierung
  *   @license
  *
  *   This program is free software; you can redistribute it and/or modify
@@ -38,7 +38,7 @@ namespace wblib;
  *
  * @category   wblib
  * @package    Registry
- * @copyright  Copyright (c) 2013 BlackBird Webprogrammierung
+ * @copyright  Copyright (c) 2014 BlackBird Webprogrammierung
  * @license
  */
 if ( ! class_exists( 'Registry', false ) )
