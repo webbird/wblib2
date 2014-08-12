@@ -592,7 +592,7 @@ if (!class_exists('wblib\wbFormsBase',false))
         {
             self::log('> setAttr()',7);
             $this->attr[$attr] = $value;
-            self::log('> setAttr()',7);
+            self::log('< setAttr()',7);
         }   // end function setAttr()
 
         /**
@@ -926,7 +926,7 @@ if (!class_exists('wblib\wbForms',false))
                 self::log(sprintf('insert position [%s]',$i),7);
                 if(!isset($array_ref[$name]) || !is_array($array_ref[$name]))
                     $array_ref[$name] = array();
-                //array_splice($array_ref[$name],$i,0,array($elem));
+                array_splice($array_ref[$name],$i,0,array($elem)); //insert
 
                 // 'create' element
                 if(isset($elem['type']) && $find_in == 'ELEMENTS')
@@ -1012,7 +1012,10 @@ if (!class_exists('wblib\wbForms',false))
                 $elem['name'] = wbFormsElement::generateName();
             // always generate the names of honeypot fields!
             if($elem['type']=='honeypot')
+            {
                 $elem['name'] = wbFormsElement::generateName(10,self::$globals['honeypot_prefix']);
+                $elem['type'] = 'hidden';
+            }
             if(!isset($elem['type']))
                 $elem['type'] = 'text';
             if(!isset($elem['id']))
@@ -1572,6 +1575,49 @@ echo "</textarea>";
         }   // end function hasElement()
 
         /**
+         *
+         * @access public
+         * @return
+         **/
+        public static function hasElementOfType($type,$find_in='ELEMENTS')
+        {
+            self::log('> hasElementOfType()',7);
+            $formname  = self::current();
+            $array_ref =& self::${$find_in};
+            if(isset($array_ref[$formname]) && count($array_ref[$formname]))
+            {
+                foreach($array_ref[$formname] as $index => $elem)
+                {
+                    if($find_in=='ELEMENTS' && !is_object($elem)) continue;
+                    if($find_in=='ELEMENTS')
+                    {
+                        self::log(sprintf('current element [%s]',$elem->attr['id']),7);
+                        if(
+                               ( isset($elem->attr['type']) && $elem->attr['type'] == $type )
+                        ) {
+                            self::log(sprintf('found at index [%d]',$index),7);
+                            self::log('< hasElementOfType() (inside if)',7);
+                            return $index;
+                        }
+                    }
+                    else
+                    {
+                        if(
+                               ( isset($elem['type']) && $elem['type'] == $type )
+                        ) {
+                            self::log(sprintf('current element [%s]',$elem['name']),7);
+                            self::log(sprintf('found at index [%d]',$index),7);
+                            self::log('< hasElementOfType() (inside if)',7);
+                            return $index;
+                        }
+                    }
+                }
+            }
+            self::log('not found',7);
+            self::log('< hasElementOfType()',7);
+        }   // end function hasElementOfType()
+
+        /**
          * check if the form was submitted; checks for submit button by default
          * (default name 'submit_<FORMNAME>')
          *
@@ -1761,7 +1807,7 @@ echo "</textarea>";
                             else
                             {
                                 self::log(sprintf('Invalid check method [%s]!',$method),1);
-                                self::log(sprintf('Invalid check method [%s]!',$method),7);
+                                self::log(sprintf('Invalid check method [%s]! (element [%s])',$method,$elem['name']),7);
                                 continue;
                             }
                         }
@@ -2056,10 +2102,10 @@ echo "</textarea>";
  ******************************************************************************/
 
     /**
-     * form builder label element class
+     * form builder info element class
      *
      * @category   wblib2
-     * @package    wbFormsElementLabel
+     * @package    wbFormsElementInfo
      * @copyright  Copyright (c) 2014 BlackBird Webprogrammierung
      * @license    GNU LESSER GENERAL PUBLIC LICENSE Version 3
      */
@@ -2076,7 +2122,7 @@ echo "</textarea>";
             $this->attr['class'] = 'ui-widget ui-widget-content ui-corner-all ui-helper-clearfix ui-state-highlight';
             return $this;
         }
-    }   // ---------- end class wbFormsElementLabel ----------
+    }   // ---------- end class wbFormsElementInfo ----------
 
     /**
      * form builder fieldset element class
@@ -2224,7 +2270,7 @@ echo "</textarea>";
             wbFormsElementSelect::$tpl
                 = '%label%%is_required%'
                 . "\n"
-                . '<select%name%%id%%class%%style%%multiple%'
+                . '<select%name%%id%%class%%style%%title%%multiple%'
                 . '%tabindex%%accesskey%%disabled%%readonly%%required%%onblur%%onchange%%onclick%%onfocus%%onselect%>'
                 . "\n"
                 . '%options%'
@@ -2747,7 +2793,7 @@ echo "</textarea>";
         public function init()
         {
             $this->attributes['type']        = 'radio';
-            $this->attributes['checked']     = 'checked';
+            $this->attributes['checked']     = '';
             $this->attributes['class']       = 'fblabel';
             $this->attributes['options']     = array();
             $this->attributes['label_span']  = NULL;
@@ -2924,11 +2970,11 @@ echo "</textarea>";
      */
     class wbFormsJQuery extends wbFormsBase
     {
-        protected static $tpl           = NULL;
+        protected static $tpl               = NULL;
         /**
          * template to load scripts into the header
          **/
-        private   static $script_tpl    = NULL;
+        private   static $script_tpl        = NULL;
         /**
          * template to load scripts via JS
          **/
@@ -2946,9 +2992,9 @@ echo "</textarea>";
          **/
         private   static $inline_css_tpl    = NULL;
         /**
-         * template to load CSS via JS
+         * template to append something to head
          **/
-        private   static $css_js_tpl        = NULL;
+        private   static $append_tpl        = NULL;
         /**
          * template for component loading
          **/
@@ -2966,15 +3012,24 @@ echo "</textarea>";
          **/
         private   static $scripts           = array();
         /**
+         * global code (for multiple forms)
+         **/
+        private   static $global_code_sent  = NULL;
+        /**
          * globals for jQuery config
          **/
         protected static $globals           = array(
-            'core_cdn' => 'https://ajax.googleapis.com/ajax/libs/jquery/2/jquery.min.js',
-            'ui_cdn'   => 'https://ajax.googleapis.com/ajax/libs/jqueryui/1/jquery-ui.min.js',
-            'ui_css'   => 'https://ajax.googleapis.com/ajax/libs/jqueryui/1.10.3/themes/%s/jquery-ui.min.css',
-            'ui_theme' => 'sunny',
-            'sel_css'  => 'http://cdn.jsdelivr.net/select2/3.4.2/select2.css',
-            'sel_cdn'  => 'http://cdn.jsdelivr.net/select2/3.4.2/select2.min.js',
+            // to use hosted scripts, we defined CDNs here
+            'CDNs' => array(
+                'jquery'         => '//ajax.googleapis.com/ajax/libs/jquery/2/jquery.min.js',
+                'jqueryui'       => '//ajax.googleapis.com/ajax/libs/jqueryui/1/jquery-ui.min.js',
+                'jqueryuithemes' => '//ajax.googleapis.com/ajax/libs/jqueryui/1.11.0/themes/%s/jquery-ui.css',
+                'select2'        => '//cdn.jsdelivr.net/select2/3.4.8/select2.min.js',
+            ),
+            'enabled'       => true,
+            'prefer_locals' => true,    // prefer scripts located in 3rdparty folder
+            'ui_theme'      => 'start', // default UI theme
+            //'sel_css'  => '//cdn.jsdelivr.net/select2/3.4.8/select2.css',
         );
 
         public static function init()
@@ -2982,25 +3037,6 @@ echo "</textarea>";
             self::log('> jQuery::init()',7);
             wbFormsJQuery::$tpl
                 = '<script type="text/javascript">%s</script>';
-            wbFormsJQuery::$css_tpl
-                = '<link rel="stylesheet" href="%s" type="text/css" media="screen" />';
-            wbFormsJQuery::$inline_css_tpl
-                = '<style type="text/css" media="screen">%s</style>';
-            wbFormsJQuery::$css_js_tpl
-                = '$("head").append(\'<link rel="stylesheet" href="%s" type="text/css" />\');';
-            wbFormsJQuery::$script_tpl
-                = '<script type="text/javascript" src="%s" %s></script>';
-            wbFormsJQuery::$inline_script_tpl
-                = '<script type="text/javascript">%s</script>';
-            wbFormsJQuery::$comp_tpl
-                = '$("#%s").%s({%s});';
-            wbFormsJQuery::$scripts
-                = array(
-                      'jQuery'  => self::$globals['core_cdn'],
-                      'UI'      => self::$globals['ui_cdn'],
-                      'select2' => self::$globals['sel_cdn']
-                  );
-            wbForms::addCSSLink(self::$globals['sel_css']);
             self::log('< jQuery::init()',7);
         }   // end function init()
 
@@ -3133,63 +3169,46 @@ echo "</textarea>";
         public static function render()
         {
             self::log('> jQuery::render()',7);
-            global $tpl;
-            $output = $code = NULL;
-            $space  = str_repeat(' ',16);
+            if(!self::$globals['enabled']) return;
 
             // set base URL
-            if(wbFormsBase::$globals['wblib_url'])
-                $code = "\n".$space.'var WBLIB_URL = "'.wbFormsBase::$globals['wblib_url'].'";'."\n";
-            else
-                $code = "\n".$space.'var WBLIB_URL = "'.wbFormsBase::getURL().'";'."\n";
-
-            // set other vars (CSS and JS locations)
-            foreach(self::$globals as $key => $value)
+            if(!defined('WBLIB_URL'))
             {
-                $code .= 'var wbforms_'.$key.' = "'.$value.'";'."\n";
+                if(wbFormsBase::$globals['wblib_url'])
+                    define('WBLIB_URL',wbFormsBase::$globals['wblib_url']);
+                else
+                    define('WBLIB_URL',wbFormsBase::getURL());
             }
 
-            // include jQl
-            $code .= file_get_contents(dirname(__FILE__).'/forms/jQl.min.js')
-                  .  "\n$space"."if (typeof jQuery === 'undefined') {\n"
-                  .  "$space    loadjQ(wbforms_core_cdn);\n"
-                  .  "$space}\n"
-                  ;
+            $r_code = '';
 
-            // include our JS
-            $code .= "jQl.loadjQdep(WBLIB_URL + '/forms/forms.js');\n";
-
-            // add any other JS
-            $code .= implode("\n", wbForms::$INLINEJS);
-
-            // add UI components
-            if(count(self::$ui_components))
+            // avoid to add global code more than once
+            if(!self::$global_code_sent)
             {
-                // attach components
-                if(count(self::$attach_comp))
-                {
-                    global $elem,$space;
-                    foreach(self::$attach_comp as $elem => $comps)
-                    {
-                        $comps = self::unique($comps);
-                        // '$("#%s").%s(%s)'
-                        $code .= implode("\n$space", array_map(
-                            function($k,$v) {
-                                global $elem,$space;
-                                return sprintf(
-                                    $space.wbFormsJQuery::$comp_tpl,
-                                    $elem, $k, $v
-                                )."\n";
-                            },
-                            array_keys($comps[0]),
-                            array_values($comps[0])
-                        ));
-                    }
-                }
-
+                $code1 = 'var wbforms_ui_css = "'
+                       . self::$globals['CDNs']['jqueryuithemes']
+                       . '";'."\n"
+                       . 'var wbforms_ui_theme = "'
+                       . self::$globals['ui_theme']
+                       . '";'."\n"
+                       ;
+                #foreach(self::$globals as $key => $value)
+                #    $code1 .= $space.'if(typeof wbforms_'.$key.' == "undefined" ) { var wbforms_'.$key.' = "'.$value.'"; }'."\n";
+                // add any other JS
+                $code1 .= implode("\n", wbForms::$INLINEJS);
+                self::$global_code_sent = true;
+                self::log('global coded generated',7);
+                // create config for require.js
+                $r_code = "
+<script type=\"text/javascript\">
+    var WBLIB_URL = '".WBLIB_URL."';
+    ".$code1."
+</script>
+<script src=\"".WBLIB_URL."/3rdparty/js/requirejs/require.js\" data-main=\"".WBLIB_URL."/3rdparty/js/loader\"></script>
+";
             }
             self::log('< jQuery::render()',7);
-            return sprintf(self::$tpl,$code);
+            return $r_code; //sprintf(self::$tpl,$code);
         }   // end function render()
 
         private static function unique($array)
@@ -3267,6 +3286,19 @@ echo "</textarea>";
             }
         }   // end function check_string()
 
+/*******************************************************************************
+ * CHECK FOR ALLOWED DATA TYPES, USING OWN FILTERS
+ ******************************************************************************/
+
+        public static function check_array($incoming,$allowed)
+        {
+            $isIndexed = array_values($allowed) === $allowed;
+            if(!$isIndexed)
+                return in_array($incoming,$allowed);
+            else
+                return in_array($incoming,array_keys($allowed));
+        }   // end function check_array()
+
         public static function check_html($var)
         {
             $dom = new \DOMDocument;
@@ -3286,26 +3318,12 @@ echo "</textarea>";
             return filter_var($var,FILTER_VALIDATE_INT,$opt);
         }   // end function check_int()
 
-        /**
-         *
-         * @access public
-         * @return
-         **/
-        public static function check_array($incoming,$allowed)
+        public static function check_plain($var,$opt='')
         {
-            $isIndexed = array_values($allowed) === $allowed;
-            if(!$isIndexed)
-                return in_array($incoming,$allowed);
-            else
-                return in_array($incoming,array_keys($allowed));
-        }   // end function check_array()
+            // in fact, we do not check anything here!
+            return $var;
+        }
 
-
-        /**
-         *
-         * @access public
-         * @return
-         **/
         public static function checkToken($dynamic=NULL)
         {
             if(!$dynamic)

@@ -1070,7 +1070,7 @@ interface wbQuery_DriverInterface
             $import = str_replace ( '\\\\n'         , "\n"        , $import );
             // split into chunks
             $sql = preg_split(
-                '~(insert\s+(?:ignore\s+)into\s+|update\s+|replace\s+into\s+|create\s+table|truncate\s+table|delete\s+from)~i',
+                '~(insert\s+ignore\s+into\s+|insert\s+into\s+|update\s+|replace\s+into\s+|create\s+table|truncate\s+table|delete\s+from)~i',
                 $import,
                 -1,
                 PREG_SPLIT_DELIM_CAPTURE|PREG_SPLIT_NO_EMPTY
